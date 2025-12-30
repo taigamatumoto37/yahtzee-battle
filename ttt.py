@@ -4,7 +4,7 @@ import time
 from collections import Counter
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Fixed & Polished", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Healing Innate", layout="wide")
 
 st.markdown("""
     <style>
@@ -60,6 +60,7 @@ def get_innate_deck():
     return [
         Card("固有:一閃", "attack", 15, "check_pair"),
         Card("固有:双刃", "attack", 25, "check_pair"),
+        Card("固有:癒歌", "heal", 30, "check_pair"), # 追加された回復
         Card("固有:毒液", "status", 10, "check_pair", effect="poison", duration=3),
         Card("固有:強撃", "attack", 45, "check_three"),
         Card("固有:爆裂", "attack", 70, "check_small_straight"),
@@ -171,7 +172,6 @@ elif st.session_state.phase == "battle":
 
     st.write("---")
     available = []
-    # 削除バグ回避のためコピーを作成
     cards_to_check = [(c, "固有") for c in p_now["innate"]] + [(c, "手札") for c in p_now["hand"]]
     for c, t in cards_to_check:
         reason = get_reason_text(st.session_state.dice, c.condition_name)
@@ -202,7 +202,6 @@ elif st.session_state.phase == "battle":
                         elif card.type == "status" and card.effect == "regen":
                             p_now["status"].append({"type": "regen", "value": card.value, "duration": card.duration})
                         
-                        # 安全な削除
                         target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
                         for i, item in enumerate(target_list):
                             if item.name == card.name:
@@ -230,15 +229,13 @@ elif st.session_state.phase == "counter":
 
     g_val = 0
     if "防御しない" not in choice:
-        g_idx = options.index(choice) - 1
-        g_val = guards[g_idx].value
+        g_val = guards[options.index(choice) - 1].value
     
     final_dmg = max(0, base_dmg - g_val)
     if card.type == "attack": st.metric("ダメージ予定", final_dmg, delta=-g_val)
 
     if st.button("結果を確定", type="primary", use_container_width=True):
         if g_val > 0:
-            # ガードカードを消費
             for i, c in enumerate(p_opp["hand"]):
                 if c.name == guards[options.index(choice)-1].name:
                     p_opp["hand"].pop(i); break
@@ -249,7 +246,6 @@ elif st.session_state.phase == "counter":
             p_opp["hp"] -= final_dmg
             add_log("💥", f"{final_dmg} ダメージ")
 
-        # 使用した攻撃カードを削除（安全な名前一致方式）
         target_list = p_now["innate"] if action["source"] == "固有" else p_now["hand"]
         for i, item in enumerate(target_list):
             if item.name == card.name:
