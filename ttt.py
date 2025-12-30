@@ -3,14 +3,13 @@ import random
 from collections import Counter
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Balanced", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Unified UI", layout="wide")
 
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e14; color: #ffffff; }
     h1, h2, h3, p, label { color: #ffffff !important; }
     div[data-testid="stMetricValue"] > div { color: #00ffaa !important; }
-    .card-box { border: 1px solid #3e4452; padding: 10px; border-radius: 8px; background-color: #1a1c23; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -58,14 +57,12 @@ def get_innate_deck():
 # --- 初期化 ---
 if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリセット"):
     common_deck = []
-    # バランス調整済みの山札
     for _ in range(15): common_deck.append(Card("追撃・小剣", "attack", 25, "check_pair"))
     for _ in range(10): common_deck.append(Card("強襲・大剣", "attack", 65, "check_three"))
-    for _ in range(6):  common_deck.append(Card("アイアン・ガード", "guard", 45, "check_pair")) # 削減
-    for _ in range(5):  common_deck.append(Card("癒しのハーブ", "heal", 35, "check_pair")) # 追加：即時回復
-    for _ in range(3):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3)) # 追加：持続回復
+    for _ in range(6):  common_deck.append(Card("アイアン・ガード", "guard", 45, "check_pair"))
+    for _ in range(5):  common_deck.append(Card("癒しのハーブ", "heal", 35, "check_pair"))
+    for _ in range(3):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3))
     for _ in range(4):  common_deck.append(Card("猛毒の粉末", "status", 12, "check_pair", effect="poison", duration=3))
-    
     random.shuffle(common_deck)
     st.session_state.update({
         'deck': common_deck, 
@@ -93,7 +90,6 @@ def switch_player():
     if st.session_state.p1["hp"] <= 0: st.session_state.winner = "PLAYER 2"
     elif st.session_state.p2["hp"] <= 0: st.session_state.winner = "PLAYER 1"
     if st.session_state.winner: return
-    
     st.session_state.current_player = "P2" if st.session_state.current_player == "P1" else "P1"
     process_status_effects('p1' if st.session_state.current_player == "P1" else 'p2')
     st.session_state.phase = "action"; st.session_state.reroll_done = False
@@ -106,11 +102,10 @@ st.title("⚔️ YAHTZEE TACTICS ⚔️")
 
 if st.session_state.winner:
     st.balloons(); st.success(f"🏆 {st.session_state.winner} の勝利！")
-    if st.button("もう一度遊ぶ", use_container_width=True):
+    if st.button("もう一度遊ぶ", use_container_width=True, type="primary"):
         del st.session_state['deck']; st.rerun()
     st.stop()
 
-# ステータス表示
 cols = st.columns(2)
 for i, (col, key) in enumerate(zip(cols, ["p1", "p2"])):
     p = st.session_state[key]
@@ -129,7 +124,8 @@ if st.session_state.phase == "action":
     st.info(f"👉 現在のターン: {st.session_state.current_player}")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("🎴 山札からドローして交代", use_container_width=True):
+        # ドローボタンをPrimary（赤～オレンジ系）に変更
+        if st.button("🎴 山札からドローして交代", use_container_width=True, type="primary"):
             p = st.session_state[st.session_state.current_player.lower()]
             if st.session_state.deck and len(p["hand"]) < 5:
                 p["hand"].append(st.session_state.deck.pop())
@@ -145,11 +141,10 @@ elif st.session_state.phase == "battle":
     d_cols = st.columns(5)
     for i, d in enumerate(st.session_state.dice): d_cols[i].markdown(f"## {DICE_ICONS[d]}")
     if not st.session_state.reroll_done:
-        if st.button("🎲 振り直す"):
+        if st.button("🎲 振り直す", type="secondary"):
             st.session_state.dice = [random.randint(1, 6) for _ in range(5)]; st.session_state.reroll_done = True; st.rerun()
 
     st.write("---")
-    st.subheader("使用可能なカード")
     available = []
     for c in p_now["innate"]:
         reason = get_reason_text(st.session_state.dice, c.condition_name)
@@ -160,7 +155,7 @@ elif st.session_state.phase == "battle":
 
     if not available:
         st.warning("出せる役がありません。")
-        if st.button("ターン終了"): switch_player(); st.rerun()
+        if st.button("ターン終了", type="primary"): switch_player(); st.rerun()
     else:
         grid = st.columns(3)
         for idx, (card, reason, source) in enumerate(available):
@@ -178,12 +173,12 @@ elif st.session_state.phase == "battle":
                 else:
                     st.markdown(f":blue[防御: {card.value}] ({reason})")
                 
-                if st.button("発動", key=f"btn_{idx}", use_container_width=True):
+                # 発動ボタンをPrimaryに変更
+                if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
                     if card.type in ["attack", "status"] and card.effect != "regen":
                         st.session_state.pending_action = {"card": card, "source": source}
                         st.session_state.phase = "counter"; st.rerun()
                     else:
-                        # 回復・防御・リジェネは即時処理
                         if card.type == "heal": p_now["hp"] = min(150, p_now["hp"] + card.value)
                         elif card.type == "guard": p_now["guard"] = card.value
                         elif card.type == "status" and card.effect == "regen":
@@ -193,7 +188,6 @@ elif st.session_state.phase == "battle":
                             p_now["innate"].remove(card)
                             if not p_now["innate"]:
                                 p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
-                                st.session_state.log.insert(0, "✨ 固有復活 ＆ 攻撃力+10")
                         else: p_now["hand"].remove(card)
                         switch_player(); st.rerun()
 
@@ -205,7 +199,8 @@ elif st.session_state.phase == "counter":
     options = ["防御しない"] + [f"{g.name} ({g.value})" for g in guards]
     choice = st.radio("ガード選択", options)
 
-    if st.button("結果確定", type="primary"):
+    # 結果確定ボタンをPrimaryに変更
+    if st.button("結果確定", type="primary", use_container_width=True):
         action = st.session_state.pending_action
         card = action["card"]
         p_now = st.session_state[st.session_state.current_player.lower()]
@@ -220,7 +215,7 @@ elif st.session_state.phase == "counter":
             st.session_state.log.insert(0, f"💥 {dmg}ダメ！")
         elif card.type == "status":
             p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
-            st.session_state.log.insert(0, f"☣️ 毒付与！")
+            st.session_state.log.insert(0, f"☣️ 状態異常付与！")
 
         if action["source"] == "固有":
             p_now["innate"].remove(card)
