@@ -2,7 +2,7 @@ import streamlit as st
 import random
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: 8 Innate Cards Edition", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Logic Fixed", layout="wide")
 
 st.markdown("""
     <style>
@@ -20,18 +20,29 @@ st.markdown("""
 
 DICE_ICONS = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
 
-# --- 判定関数 ---
-def check_pair(d): return any(d.count(x) >= 2 for x in set(d))
-def check_three(d): return any(d.count(x) >= 3 for x in set(d))
+# --- 【修正】より確実な判定ロジック ---
+
+def check_pair(d): 
+    return any(d.count(x) >= 2 for x in set(d))
+
+def check_three(d): 
+    return any(d.count(x) >= 3 for x in set(d))
+
 def check_small_straight(d): 
-    s = sorted(list(set(d)))
-    for i in range(len(s)-3):
-        if s[i+3] - s[i] == 3: return True
-    return False
+    # 重複を除去して昇順に並べる
+    unique_sorted = sorted(list(set(d)))
+    # 1-2-3-4, 2-3-4-5, 3-4-5-6 のいずれかを含んでいるか
+    sets = [{1,2,3,4}, {2,3,4,5}, {3,4,5,6}]
+    d_set = set(d)
+    return any(s.issubset(d_set) for s in sets)
+
 def check_full_house(d): 
-    counts = [d.count(x) for x in set(d)]
-    return (3 in counts and 2 in counts) or counts.count(3) == 2 or 5 in counts or 4 in counts
-def check_yahtzee(d): return len(set(d)) == 1
+    counts = sorted([d.count(x) for x in set(d)])
+    # [2, 3] または [5] (ヤッツィーもフルハウスとして扱う)
+    return counts == [2, 3] or counts == [5]
+
+def check_yahtzee(d): 
+    return len(set(d)) == 1
 
 def get_satisfied_condition(d, condition_func):
     if condition_func == check_pair and check_pair(d): return "ワンペア"
@@ -57,7 +68,6 @@ def get_innate_deck():
         Card("固有:アルティメット・エンド", "attack", 110, check_yahtzee)
     ]
 
-# --- ゲーム初期化 ---
 if 'deck' not in st.session_state:
     common_deck = []
     for _ in range(12): common_deck.append(Card("アイアン・シールド", "guard", 25, check_pair))
@@ -70,7 +80,7 @@ if 'deck' not in st.session_state:
         'p1': {"hp": 150, "hand": [], "bonus": 0, "guard_value": 0, "innate": get_innate_deck()},
         'p2': {"hp": 150, "hand": [], "bonus": 0, "guard_value": 0, "innate": get_innate_deck()},
         'current_player': "P1", 'dice': [random.randint(1, 6) for _ in range(5)],
-        'phase': "action", 'reroll_done': False, 'log': ["バトル開始！固有カード8枚配布済み！"]
+        'phase': "action", 'reroll_done': False, 'log': ["バトル開始！"]
     })
 
 def add_log(msg): st.session_state.log.insert(0, msg)
@@ -79,12 +89,13 @@ def switch_player():
     st.session_state.current_player = "P2" if st.session_state.current_player == "P1" else "P1"
     st.session_state.phase = "action"
     st.session_state.reroll_done = False
+    # ターン交代時に、これから行動するプレイヤーの防御値をリセット
     if st.session_state.current_player == "P1": st.session_state.p1["guard_value"] = 0
     else: st.session_state.p2["guard_value"] = 0
     st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
 
 # --- UI ---
-st.title("🎲 Yahtzee Tactics: 8-Innate & 5-Hand Limit")
+st.title("🎲 Yahtzee Tactics: Logic Fixed")
 
 c1, c2 = st.columns(2)
 for i, (col, p_key) in enumerate(zip([c1, c2], ["p1", "p2"])):
@@ -95,7 +106,7 @@ for i, (col, p_key) in enumerate(zip([c1, c2], ["p1", "p2"])):
             <div class="player-box {'active-player' if is_active else ''}">
                 <h3>PLAYER {i+1}</h3>
                 <h2 style="color: #4CAF50;">HP: {p['hp']}</h2>
-                <p>Bonus: +{p['bonus']} | 🛡️防御: {p['guard_value']} | 固有: {len(p['innate'])}枚 | 手札: {len(p['hand'])}/5</p>
+                <p>Bonus: +{p['bonus']} | 🛡️防御中: {p['guard_value']} | 固有: {len(p['innate'])}枚 | 手札: {len(p['hand'])}/5</p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -107,10 +118,8 @@ dice_html = "".join([f'<div class="dice-icon">{DICE_ICONS[d]}</div>' for d in st
 st.markdown(f'<div class="dice-container">{dice_html}</div>', unsafe_allow_html=True)
 
 if st.session_state.phase == "action":
-    st.info(f"【{st.session_state.current_player} 移動フェーズ】山札ドローか攻撃か選択")
+    st.info(f"【{st.session_state.current_player} 移動フェーズ】")
     cols = st.columns(2)
-    
-    # ドローボタン（5枚制限チェック）
     can_draw = len(p_now["hand"]) < 5
     if cols[0].button("🎴 山札から引いて交代", use_container_width=True, disabled=not can_draw):
         if st.session_state.deck:
@@ -118,70 +127,62 @@ if st.session_state.phase == "action":
             add_log(f"{st.session_state.current_player}がドローして交代")
             switch_player()
             st.rerun()
-    if not can_draw:
-        cols[0].caption("⚠ 手札が満タン(5枚)です。攻撃してください。")
-        
     if cols[1].button("⚔️ バトルフェーズへ", use_container_width=True):
         st.session_state.phase = "battle"
         st.rerun()
 
 elif st.session_state.phase == "battle":
-    st.success(f"【{st.session_state.current_player} バトルフェーズ】役を狙え！")
+    st.success(f"【{st.session_state.current_player} バトルフェーズ】")
     if not st.session_state.reroll_done:
-        if st.button("🎲 ダイスを一度だけ振り直す", type="primary", use_container_width=True):
+        if st.button("🎲 ダイスを振り直す", type="primary", use_container_width=True):
             st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
             st.session_state.reroll_done = True
             st.rerun()
 
-    # 出せるカードの判定
-    available_innate = []
+    # 出せるカード判定
+    all_available = []
+    # 固有カードのチェック
     for c in p_now["innate"]:
         reason = get_satisfied_condition(st.session_state.dice, c.condition)
-        if reason: available_innate.append((c, reason, "innate"))
-
-    available_hand = []
+        if reason: all_available.append((c, reason, "innate"))
+    # 手札カードのチェック
     for c in p_now["hand"]:
         reason = get_satisfied_condition(st.session_state.dice, c.condition)
-        if reason: available_hand.append((c, reason, "hand"))
-
-    all_available = available_innate + available_hand
+        if reason: all_available.append((c, reason, "hand"))
 
     if not all_available:
-        st.error("役が揃いませんでした。")
+        st.error("役が揃っていません！")
         if st.button("ターン終了"):
             switch_player()
             st.rerun()
     else:
-        # カード選択
         labels = [f"[{a[2].upper()}] {a[0].name} ({a[1]})" for a in all_available]
         choice = st.radio("発動するカード:", range(len(labels)), format_func=lambda x: labels[x])
         
-        if st.button("🔥 カード発動！", use_container_width=True):
+        if st.button("🔥 発動！", use_container_width=True):
             card, reason, source = all_available[choice]
             
-            # 効果実行
             if card.type == "attack":
                 dmg = max(0, (card.value + p_now["bonus"]) - p_opp["guard_value"])
                 p_opp["hp"] -= dmg
                 msg = f"{card.name}！ {dmg}ダメージ！"
                 if card.effect == "draw" and len(p_now["hand"]) < 5 and st.session_state.deck:
                     p_now["hand"].append(st.session_state.deck.pop())
-                    msg += "（追加ドロー成功！）"
+                    msg += "（追加ドロー！）"
                 add_log(msg)
             elif card.type == "guard":
                 p_now["guard_value"] = card.value
-                add_log(f"{card.name}！ ガード{card.value}を展開")
+                add_log(f"{card.name}！ ガード値{card.value}展開")
             elif card.type == "heal":
                 p_now["hp"] += card.value
-                add_log(f"{card.name}！ HPを{card.value}回復")
+                add_log(f"{card.name}！ {card.value}回復")
 
-            # 消費・復活処理
             if source == "innate":
                 p_now["innate"].remove(card)
                 if len(p_now["innate"]) == 0:
                     p_now["bonus"] += 10
                     p_now["innate"] = get_innate_deck()
-                    add_log("🌟 覚醒！固有技復活＆Bonus+10！")
+                    add_log("🌟 覚醒！全復活＆Bonus+10！")
             else:
                 p_now["hand"].remove(card)
             
