@@ -4,6 +4,14 @@ import random
 # --- ページ設定 ---
 st.set_page_config(page_title="Yahtzee Battle Online", layout="wide")
 
+# デザイン調整：背景をダークにし、UIをゲームらしく整える
+st.markdown("""
+    <style>
+    .stApp { background-color: #0e1117; color: #ffffff; }
+    .stMetric { background-color: #1e2130; border-radius: 10px; padding: 10px; border: 1px solid #4B4B4B; }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- 判定関数ロジック ---
 def check_pair(d): return any(d.count(x) >= 2 for x in set(d))
 def check_three(d): return any(d.count(x) >= 3 for x in set(d))
@@ -67,9 +75,15 @@ col1, col2 = st.columns(2)
 for i, p_key in enumerate(["p1", "p2"]):
     p = st.session_state[p_key]
     with (col1 if i == 0 else col2):
-        st.subheader(f"PLAYER {i+1}" + (" (手番)" if st.session_state.current_player == f"P{i+1}" else ""))
-        st.progress(max(0, p["hp"]) / 100)
-        st.write(f"❤️ HP: {p['hp']} | ⚔️ Bonus: +{p['bonus']}")
+        player_title = f"👤 PLAYER {i+1}"
+        if st.session_state.current_player == f"P{i+1}":
+            st.success(f"**{player_title} (手番)**")
+        else:
+            st.subheader(player_title)
+        
+        # HP表示：st.metric を使用し100超えを許容
+        st.metric(label="HP", value=f"{p['hp']} / 100", delta=None)
+        st.write(f"⚔️ Bonus: +{p['bonus']}")
         status_str = ", ".join([f"{k}({v}T)" for k, v in p["statuses"].items() if v > 0])
         st.write(f"⚠️ 状態: {status_str if status_str else 'なし'}")
 
@@ -77,6 +91,14 @@ st.divider()
 
 p_now = st.session_state.p1 if st.session_state.current_player == "P1" else st.session_state.p2
 p_opp = st.session_state.p2 if st.session_state.current_player == "P1" else st.session_state.p1
+
+# 敗北判定
+if p_now["hp"] <= 0:
+    st.error(f"💀 {st.session_state.current_player} は敗北した！")
+    if st.button("リセットして再戦"):
+        del st.session_state.deck
+        st.rerun()
+    st.stop()
 
 if st.session_state.phase == "start":
     for s, t in p_now["statuses"].items():
