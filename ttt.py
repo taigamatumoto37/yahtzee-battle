@@ -4,7 +4,6 @@ import random
 # --- ページ設定 ---
 st.set_page_config(page_title="Yahtzee Battle Online", layout="wide")
 
-# デザイン調整：背景をダークにし、UIをゲームらしく整える
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: #ffffff; }
@@ -51,6 +50,7 @@ if 'deck' not in st.session_state:
     st.session_state.current_player = "P1"
     st.session_state.dice = [1, 1, 1, 1, 1]
     st.session_state.phase = "start"
+    st.session_state.rerolled = False  # 振り直しフラグを初期化
     st.session_state.log = ["ゲーム開始！"]
 
 # 固有技
@@ -66,6 +66,7 @@ def add_log(msg):
 def switch_player():
     st.session_state.current_player = "P2" if st.session_state.current_player == "P1" else "P1"
     st.session_state.phase = "start"
+    st.session_state.rerolled = False  # 交代時にフラグをリセット
     st.session_state.turn += 1
 
 # --- UI表示 ---
@@ -81,7 +82,6 @@ for i, p_key in enumerate(["p1", "p2"]):
         else:
             st.subheader(player_title)
         
-        # HP表示：st.metric を使用し100超えを許容
         st.metric(label="HP", value=f"{p['hp']} / 100", delta=None)
         st.write(f"⚔️ Bonus: +{p['bonus']}")
         status_str = ", ".join([f"{k}({v}T)" for k, v in p["statuses"].items() if v > 0])
@@ -92,11 +92,11 @@ st.divider()
 p_now = st.session_state.p1 if st.session_state.current_player == "P1" else st.session_state.p2
 p_opp = st.session_state.p2 if st.session_state.current_player == "P1" else st.session_state.p1
 
-# 敗北判定
 if p_now["hp"] <= 0:
     st.error(f"💀 {st.session_state.current_player} は敗北した！")
     if st.button("リセットして再戦"):
-        del st.session_state.deck
+        for key in st.session_state.keys():
+            del st.session_state[key]
         st.rerun()
     st.stop()
 
@@ -112,7 +112,6 @@ if st.session_state.phase == "start":
 
 st.write(f"### 🎲 ダイス: {' '.join([f'[{d}]' for d in st.session_state.dice])}")
 
-# フェーズ分岐
 if st.session_state.phase == "action":
     c1, c2 = st.columns(2)
     if len(p_now["hand"]) < 5:
@@ -128,10 +127,15 @@ if st.session_state.phase == "action":
         st.rerun()
 
 elif st.session_state.phase == "battle":
-    if st.button("一度だけ振り直す"):
-        st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
-        add_log("ダイスを振り直した")
-        st.rerun()
+    # 振り直しボタンの制御
+    if not st.session_state.rerolled:
+        if st.button("一度だけ振り直す"):
+            st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
+            st.session_state.rerolled = True  # ここでフラグを立てる
+            add_log("ダイスを振り直した")
+            st.rerun()
+    else:
+        st.info("⚠️ 振り直し済みです。")
 
     pool = [c for c in innate_cards if c.name not in p_now["used_innate"]] + p_now["hand"]
     available = [c for c in pool if c.condition(st.session_state.dice)]
@@ -165,7 +169,6 @@ elif st.session_state.phase == "battle":
                 p_opp["statuses"][s_name] = s_turn
                 add_log(f"{selected_card.name}！ 相手を{s_name}にした")
 
-            # 消去処理の安全化
             found_in_hand = False
             for i, c in enumerate(p_now["hand"]):
                 if c is selected_card:
