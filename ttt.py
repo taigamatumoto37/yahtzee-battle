@@ -3,7 +3,7 @@ import random
 from collections import Counter
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Attack Mode", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Damage Preview", layout="wide")
 
 st.markdown("""
     <style>
@@ -25,6 +25,7 @@ st.markdown("""
     .bg-innate { background-color: #ff4b4b; color: white; }
     .bg-hand { background-color: #28a745; color: white; }
     .status-badge { background-color: #9b59b6; color: white; padding: 2px 8px; border-radius: 5px; font-size: 0.8em; margin-top: 5px; display: inline-block; }
+    .dmg-highlight { color: #ffeb3b; font-weight: bold; font-size: 1.1em; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -72,13 +73,12 @@ def get_innate_deck():
 # --- 初期化 ---
 if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリセット"):
     common_deck = []
-    # --- 山札の確率配分（アタック重視） ---
-    for _ in range(15): common_deck.append(Card("追撃・小剣", "attack", 20, "check_pair")) # 追加
-    for _ in range(12): common_deck.append(Card("強襲・大剣", "attack", 65, "check_three")) # 増量
-    for _ in range(8):  common_deck.append(Card("アイアン・シールド", "guard", 35, "check_pair")) # 減量
-    for _ in range(5):  common_deck.append(Card("癒しのハーブ", "heal", 30, "check_pair")) # 減量
-    for _ in range(5):  common_deck.append(Card("猛毒の粉末", "status", 12, "check_pair", effect="poison", duration=3)) # 追加
-    for _ in range(3):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3)) # 減量
+    for _ in range(15): common_deck.append(Card("追撃・小剣", "attack", 20, "check_pair"))
+    for _ in range(12): common_deck.append(Card("強襲・大剣", "attack", 65, "check_three"))
+    for _ in range(8):  common_deck.append(Card("アイアン・シールド", "guard", 35, "check_pair"))
+    for _ in range(5):  common_deck.append(Card("癒しのハーブ", "heal", 30, "check_pair"))
+    for _ in range(5):  common_deck.append(Card("猛毒の粉末", "status", 12, "check_pair", effect="poison", duration=3))
+    for _ in range(3):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3))
     
     random.shuffle(common_deck)
     st.session_state.update({
@@ -144,18 +144,18 @@ st.divider()
 if st.session_state.phase == "action":
     st.markdown(f"<h3 style='text-align:center;'>【{st.session_state.current_player}】 移動フェーズ</h3>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    if c1.button("🎴 山札からカードを引く", use_container_width=True, disabled=len(p_now["hand"])>=5):
+    if c1.button("🎴 カードをドロー", use_container_width=True, disabled=len(p_now["hand"])>=5):
         if st.session_state.deck:
             p_now["hand"].append(st.session_state.deck.pop())
             st.session_state.log.insert(0, f"{st.session_state.current_player}がドロー"); switch_player(); st.rerun()
-    if c2.button("⚔️ バトル開始 (ダイスロール)", use_container_width=True, type="primary"):
+    if c2.button("⚔️ バトル開始", use_container_width=True, type="primary"):
         st.session_state.phase = "battle"; st.rerun()
 
 elif st.session_state.phase == "battle":
     dice_html = "".join([f'<div class="dice-box">{DICE_ICONS[d]}</div>' for d in st.session_state.dice])
     st.markdown(f'<div class="dice-container">{dice_html}</div>', unsafe_allow_html=True)
     if not st.session_state.reroll_done:
-        if st.button("🎲 ダイスを一度だけ振り直す", use_container_width=True):
+        if st.button("🎲 振り直す", use_container_width=True):
             st.session_state.dice = [random.randint(1, 6) for _ in range(5)]; st.session_state.reroll_done = True; st.rerun()
 
     all_cards = []
@@ -169,28 +169,44 @@ elif st.session_state.phase == "battle":
         st.error("役なし..."); 
         if st.button("ターン終了"): switch_player(); st.rerun()
     else:
-        st.write("### 使用するカードを選択：")
+        st.write("### 発動可能なカード：")
         cols = st.columns(len(all_cards) if len(all_cards) <= 4 else 4)
         for idx, (card, reason, source) in enumerate(all_cards):
             with cols[idx % 4]:
                 st.markdown(f"<span class='badge {'bg-innate' if source=='innate' else 'bg-hand'}'>{source.upper()}</span>", unsafe_allow_html=True)
-                if st.button(f"{card.name}\n({reason})", key=f"btn_{idx}", use_container_width=True):
+                
+                # --- ダメージ・効果のリアルタイム計算 ---
+                effect_label = ""
+                if card.type == "attack":
+                    total_dmg = max(0, (card.value + p_now["bonus"]) - p_opp["guard"])
+                    effect_label = f"\n予測ダメ: {total_dmg}"
+                elif card.type == "status" and card.effect == "poison":
+                    effect_label = f"\n毒ダメ: {card.value}×{card.duration}T"
+                elif card.type == "heal":
+                    effect_label = f"\n回復量: {card.value}"
+                elif card.type == "guard":
+                    effect_label = f"\n防御力: {card.value}"
+                
+                if st.button(f"{card.name}\n({reason}){effect_label}", key=f"btn_{idx}", use_container_width=True):
                     if card.type in ["attack", "status"] and card.effect != "regen":
                         st.session_state.pending_action = {"card": card, "source": source, "reason": reason}
                         st.session_state.phase = "counter"; st.rerun()
                     else:
                         if card.type == "heal": p_now["hp"] += card.value
                         elif card.type == "status": p_now["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
+                        elif card.type == "guard": p_now["guard"] = card.value # 自ターン防御
+                        
                         if source == "innate": p_now["innate"].remove(card)
                         else: p_now["hand"].remove(card)
-                        st.session_state.log.insert(0, f"{st.session_state.current_player}が{card.name}を使用"); switch_player(); st.rerun()
+                        st.session_state.log.insert(0, f"{st.session_state.current_player}が{card.name}を発動"); switch_player(); st.rerun()
 
 elif st.session_state.phase == "counter":
     target_p_id = "P2" if st.session_state.current_player == "P1" else "P1"
-    st.warning(f"⚔️ {st.session_state.current_player}の攻撃！ 【{target_p_id}】は防御しますか？")
+    st.warning(f"⚔️ {st.session_state.current_player}の攻撃予告！ 【{target_p_id}】防御確認フェーズ")
+    
     available_guards = [c for c in p_opp["hand"] if c.type == "guard"]
     options = ["防御しない"] + [f"{g.name} (軽減:{g.value})" for g in available_guards]
-    selected = st.radio("ガードを選択（ブラフ）:", options)
+    selected = st.radio("ガードを選択（ブラフ可能）:", options)
 
     if st.button("決定", use_container_width=True, type="primary"):
         action = st.session_state.pending_action
@@ -201,7 +217,7 @@ elif st.session_state.phase == "counter":
             g_card = available_guards[g_idx]
             current_guard = g_card.value
             p_opp["hand"].remove(g_card)
-            st.session_state.log.insert(0, f"🛡️ {target_p_id}がガード成功")
+            st.session_state.log.insert(0, f"🛡️ {target_p_id}のガード！")
 
         if atk_card.type == "attack":
             dmg = max(0, (atk_card.value + p_now["bonus"]) - current_guard)
@@ -209,7 +225,7 @@ elif st.session_state.phase == "counter":
             st.session_state.log.insert(0, f"💥 {dmg}ダメージ！")
         elif atk_card.type == "status":
             p_opp["status"].append({"type": atk_card.effect, "value": atk_card.value, "duration": atk_card.duration})
-            st.session_state.log.insert(0, f"☣️ 状態異常を付与")
+            st.session_state.log.insert(0, f"☣️ 状態異常付与")
 
         if action["source"] == "innate": p_now["innate"].remove(atk_card)
         else: p_now["hand"].remove(atk_card)
