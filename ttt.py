@@ -201,3 +201,4 @@ with lb:
     for c in p_now["hand"]:
         color = {"弱":"#8b949e", "中":"#1f6feb", "強":"#ab7df8", "レア":"#f8e3a1"}.get(c.rarity, "#ffffff")
         st.markdown(f'<div style="border-left: 5px solid {color}; padding-left: 10px;">{c.name} ({c.rarity})</div>', unsafe_allow_html=True)
+
