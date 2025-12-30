@@ -4,7 +4,7 @@ import time
 from collections import Counter
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Healing Innate", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Sorted Dice", layout="wide")
 
 st.markdown("""
     <style>
@@ -60,7 +60,7 @@ def get_innate_deck():
     return [
         Card("固有:一閃", "attack", 15, "check_pair"),
         Card("固有:双刃", "attack", 25, "check_pair"),
-        Card("固有:癒歌", "heal", 30, "check_pair"), # 追加された回復
+        Card("固有:癒歌", "heal", 30, "check_pair"),
         Card("固有:毒液", "status", 10, "check_pair", effect="poison", duration=3),
         Card("固有:強撃", "attack", 45, "check_three"),
         Card("固有:爆裂", "attack", 70, "check_small_straight"),
@@ -78,11 +78,13 @@ if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリ�
     for _ in range(3):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3))
     for _ in range(4):  common_deck.append(Card("猛毒の粉末", "status", 12, "check_pair", effect="poison", duration=3))
     random.shuffle(common_deck)
+    initial_dice = [random.randint(1, 6) for _ in range(5)]
+    initial_dice.sort() # 初期ダイスをソート
     st.session_state.update({
         'deck': common_deck, 
         'p1': {"hp": 150, "hand": [], "innate": get_innate_deck(), "guard": 0, "bonus": 0, "status": []},
         'p2': {"hp": 150, "hand": [], "innate": get_innate_deck(), "guard": 0, "bonus": 0, "status": []},
-        'current_player': "P1", 'dice': [random.randint(1, 6) for _ in range(5)],
+        'current_player': "P1", 'dice': initial_dice,
         'phase': "action", 'reroll_done': False, 
         'log_entries': [{"icon": "⚔️", "msg": "宿命の対決開始"}], 
         'winner': None, 'pending_action': None
@@ -111,7 +113,9 @@ def switch_player():
     process_status_effects('p1' if st.session_state.current_player == "P1" else 'p2')
     st.session_state.phase = "action"; st.session_state.reroll_done = False
     st.session_state.p1["guard"] = 0; st.session_state.p2["guard"] = 0
-    st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
+    new_dice = [random.randint(1, 6) for _ in range(5)]
+    new_dice.sort() # 交代時のダイスをソート
+    st.session_state.dice = new_dice
     st.session_state.pending_action = None
 
 # --- UI Layout ---
@@ -167,7 +171,19 @@ elif st.session_state.phase == "battle":
     
     if not st.session_state.reroll_done:
         if st.button("🎲 振り直す", type="primary", use_container_width=True):
-            st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
+            # 演出用のランダム表示
+            ph = st.empty()
+            for _ in range(4):
+                tmp = [random.randint(1, 6) for _ in range(5)]
+                with ph.container():
+                    cols_anim = st.columns(5)
+                    for idx, td in enumerate(tmp): cols_anim[idx].markdown(f'<div class="dice-box">{DICE_ICONS[td]}</div>', unsafe_allow_html=True)
+                time.sleep(0.1)
+            ph.empty()
+            
+            final_dice = [random.randint(1, 6) for _ in range(5)]
+            final_dice.sort() # 振り直し後の結果をソート
+            st.session_state.dice = final_dice
             st.session_state.reroll_done = True; st.rerun()
 
     st.write("---")
@@ -191,12 +207,13 @@ elif st.session_state.phase == "battle":
                 elif card.type == "heal": st.markdown(f":green[回復: {card.value}]")
                 elif card.type == "guard": st.markdown(f":blue[防御: {card.value}]")
                 
+                st.caption(f"条件: {reason}")
+                
                 if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
                     if card.type in ["attack", "status"] and card.effect != "regen":
                         st.session_state.pending_action = {"card": card, "source": tag}
                         st.session_state.phase = "counter"; st.rerun()
                     else:
-                        # 即時発動（回復・自身へのバフ等）
                         if card.type == "heal": p_now["hp"] = min(150, p_now["hp"] + card.value)
                         elif card.type == "guard": p_now["guard"] = card.value
                         elif card.type == "status" and card.effect == "regen":
