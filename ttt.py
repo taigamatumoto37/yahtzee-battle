@@ -42,17 +42,16 @@ if 'deck' not in st.session_state:
     st.session_state.turn = 1
     st.session_state.current_player = "P1"
     st.session_state.dice = [1, 1, 1, 1, 1]
-    st.session_state.phase = "start" # start, action, rerolled, end
+    st.session_state.phase = "start"
     st.session_state.log = ["ゲーム開始！"]
 
-# --- 共通の固有技定義 ---
+# 固有技
 innate_cards = [
     Card("固有:トリニティ・インパクト", "attack", 20, check_three, "固有"),
     Card("固有:五連光破斬", "attack", 25, check_straight, "固有"),
     Card("固有:神罰の五連星", "attack", 50, check_yahtzee, "固有")
 ]
 
-# --- ユーティリティ ---
 def add_log(msg):
     st.session_state.log.insert(0, msg)
 
@@ -61,12 +60,10 @@ def switch_player():
     st.session_state.phase = "start"
     st.session_state.turn += 1
 
-# --- メインUI ---
+# --- UI表示 ---
 st.title("🎲 Yahtzee Battle Tactics")
 
 col1, col2 = st.columns(2)
-
-# プレイヤー情報表示
 for i, p_key in enumerate(["p1", "p2"]):
     p = st.session_state[p_key]
     with (col1 if i == 0 else col2):
@@ -78,37 +75,32 @@ for i, p_key in enumerate(["p1", "p2"]):
 
 st.divider()
 
-# --- ターン処理 ---
 p_now = st.session_state.p1 if st.session_state.current_player == "P1" else st.session_state.p2
 p_opp = st.session_state.p2 if st.session_state.current_player == "P1" else st.session_state.p1
 
 if st.session_state.phase == "start":
-    # 持続ダメ
     for s, t in p_now["statuses"].items():
         if t > 0:
             dmg = 5 if s == "poison" else 10
             p_now["hp"] -= dmg
             p_now["statuses"][s] -= 1
             add_log(f"{st.session_state.current_player} は {s} で {dmg} ダメージを受けた")
-    
     st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
     st.session_state.phase = "action"
 
-# ダイス表示
-st.write("### 🎲 ダイス")
-st.write(" ".join([f"[{d}]" for d in st.session_state.dice]))
+st.write(f"### 🎲 ダイス: {' '.join([f'[{d}]' for d in st.session_state.dice])}")
 
-# 行動選択
+# フェーズ分岐
 if st.session_state.phase == "action":
     c1, c2 = st.columns(2)
     if len(p_now["hand"]) < 5:
         if c1.button("カードをドローして終了"):
-            new_c = st.session_state.deck.pop()
-            p_now["hand"].append(new_c)
-            add_log(f"{st.session_state.current_player} がドローした")
-            switch_player()
-            st.rerun()
-    
+            if st.session_state.deck:
+                new_c = st.session_state.deck.pop()
+                p_now["hand"].append(new_c)
+                add_log(f"{st.session_state.current_player} がドローした")
+                switch_player()
+                st.rerun()
     if c2.button("攻撃フェーズへ"):
         st.session_state.phase = "battle"
         st.rerun()
@@ -119,17 +111,16 @@ elif st.session_state.phase == "battle":
         add_log("ダイスを振り直した")
         st.rerun()
 
-    # 使用可能カード判定
     pool = [c for c in innate_cards if c.name not in p_now["used_innate"]] + p_now["hand"]
     available = [c for c in pool if c.condition(st.session_state.dice)]
 
     if not available:
         st.error("役が揃いませんでした！")
         if p_now["hand"]:
-            discard = st.selectbox("手札を1枚選んで廃棄:", p_now["hand"], format_func=lambda x: x.name)
+            discard_idx = st.selectbox("手札を1枚選んで廃棄:", range(len(p_now["hand"])), format_func=lambda x: p_now["hand"][x].name)
             if st.button("廃棄して終了"):
-                p_now["hand"].remove(discard)
-                add_log(f"{discard.name} を捨てた")
+                card = p_now["hand"].pop(discard_idx)
+                add_log(f"{card.name} を捨てた")
                 switch_player()
                 st.rerun()
         else:
@@ -137,8 +128,9 @@ elif st.session_state.phase == "battle":
                 switch_player()
                 st.rerun()
     else:
-        selected_card = st.radio("使用するカードを選択:", available, format_func=lambda x: f"{x.name} ({x.rarity}) - 威力:{x.power}")
+        selected_idx = st.radio("使用するカードを選択:", range(len(available)), format_func=lambda x: f"{available[x].name} ({available[x].rarity}) - 威力:{available[x].power}")
         if st.button("発動！"):
+            selected_card = available[selected_idx]
             if selected_card.type == "attack":
                 dmg = selected_card.power + p_now["bonus"]
                 p_opp["hp"] -= dmg
@@ -151,10 +143,14 @@ elif st.session_state.phase == "battle":
                 p_opp["statuses"][s_name] = s_turn
                 add_log(f"{selected_card.name}！ 相手を{s_name}にした")
 
-            # 消費
-            if selected_card in p_now["hand"]:
-                p_now["hand"].remove(selected_card)
-            else:
+            # 消去処理の安全化
+            found_in_hand = False
+            for i, c in enumerate(p_now["hand"]):
+                if c is selected_card:
+                    p_now["hand"].pop(i)
+                    found_in_hand = True
+                    break
+            if not found_in_hand:
                 p_now["used_innate"].append(selected_card.name)
                 if len(p_now["used_innate"]) == 3:
                     p_now["used_innate"] = []
@@ -164,7 +160,6 @@ elif st.session_state.phase == "battle":
             switch_player()
             st.rerun()
 
-# ログ表示
 st.divider()
 st.write("### 📜 バトルログ")
 for l in st.session_state.log[:10]:
