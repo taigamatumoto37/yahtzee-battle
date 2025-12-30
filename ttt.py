@@ -3,7 +3,7 @@ import random
 from collections import Counter
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Precise Logic", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Error Fixed", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,15 +29,10 @@ st.markdown("""
 
 DICE_ICONS = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
 
-# --- 判定ロジック (度数分布ベース) ---
+# --- 判定ロジック ---
 def get_counts(d): return Counter(d)
-
-def check_pair(d): 
-    return any(count >= 2 for count in get_counts(d).values())
-
-def check_three(d): 
-    return any(count >= 3 for count in get_counts(d).values())
-
+def check_pair(d): return any(count >= 2 for count in get_counts(d).values())
+def check_three(d): return any(count >= 3 for count in get_counts(d).values())
 def check_small_straight(d): 
     u = sorted(list(set(d)))
     count = 1; max_count = 1
@@ -46,14 +41,10 @@ def check_small_straight(d):
         else: count = 1
         max_count = max(max_count, count)
     return max_count >= 4
-
 def check_full_house(d): 
     counts = sorted(get_counts(d).values())
-    # 2枚+3枚、または5枚(ヤッツィー)
     return counts == [2, 3] or counts == [5]
-
-def check_yahtzee(d): 
-    return len(set(d)) == 1
+def check_yahtzee(d): return len(set(d)) == 1
 
 def get_satisfied_condition(d, condition_func):
     if condition_func == check_pair and check_pair(d): return "ワンペア"
@@ -79,6 +70,7 @@ def get_innate_deck():
         Card("固有:アルティメット・エンド", "attack", 110, check_yahtzee)
     ]
 
+# --- 初期化 ---
 if 'deck' not in st.session_state:
     common_deck = []
     for _ in range(15): common_deck.append(Card("アイアン・シールド", "guard", 25, check_pair))
@@ -99,10 +91,14 @@ def switch_player():
     st.session_state.p1["guard"] = 0; st.session_state.p2["guard"] = 0
     st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
 
-# --- UI描画 ---
+# --- メインレイアウト ---
 st.markdown("<h1 class='main-header'>⚔️ YAHTZEE TACTICS ⚔️</h1>", unsafe_allow_html=True)
-col_p1, col_vs, col_p2 = st.columns([4, 1, 4])
 
+# 現在のプレイヤーと相手を特定
+p_now = st.session_state.p1 if st.session_state.current_player == "P1" else st.session_state.p2
+p_opp = st.session_state.p2 if st.session_state.current_player == "P1" else st.session_state.p1
+
+col_p1, col_vs, col_p2 = st.columns([4, 1, 4])
 for i, (col, p_key) in enumerate(zip([col_p1, col_p2], ["p1", "p2"])):
     p = st.session_state[p_key]
     active_class = f"active-p{i+1}" if st.session_state.current_player == f"P{i+1}" else ""
@@ -117,7 +113,7 @@ st.divider()
 if st.session_state.phase == "action":
     st.markdown(f"<h3 style='text-align:center;'>【{st.session_state.current_player}】 移動フェーズ</h3>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    can_draw = len(p_now := (st.session_state.p1 if st.session_state.current_player == "P1" else st.session_state.p2))["hand"] < 5
+    can_draw = len(p_now["hand"]) < 5
     if c1.button("🎴 山札から引いて交代", use_container_width=True, disabled=not can_draw):
         if st.session_state.deck:
             p_now["hand"].append(st.session_state.deck.pop())
@@ -127,9 +123,6 @@ if st.session_state.phase == "action":
         st.session_state.phase = "battle"; st.rerun()
 
 elif st.session_state.phase == "battle":
-    p_now = st.session_state.p1 if st.session_state.current_player == "P1" else st.session_state.p2
-    p_opp = st.session_state.p2 if st.session_state.current_player == "P1" else st.session_state.p1
-    
     dice_html = "".join([f'<div class="dice-box">{DICE_ICONS[d]}</div>' for d in st.session_state.dice])
     st.markdown(f'<div class="dice-container">{dice_html}</div>', unsafe_allow_html=True)
     
@@ -138,8 +131,8 @@ elif st.session_state.phase == "battle":
             st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
             st.session_state.reroll_done = True; st.rerun()
 
-    # カード判定
     all_cards = []
+    # 固有と手札を合わせて判定
     for c in p_now["innate"] + p_now["hand"]:
         reason = get_satisfied_condition(st.session_state.dice, c.condition)
         if reason:
