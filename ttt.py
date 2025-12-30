@@ -2,7 +2,7 @@ import streamlit as st
 import random
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Logic Fixed", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Final Logic Fixed", layout="wide")
 
 st.markdown("""
     <style>
@@ -20,7 +20,7 @@ st.markdown("""
 
 DICE_ICONS = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
 
-# --- 【修正】より確実な判定ロジック ---
+# --- 【完全修正】判定ロジック ---
 
 def check_pair(d): 
     return any(d.count(x) >= 2 for x in set(d))
@@ -29,16 +29,23 @@ def check_three(d):
     return any(d.count(x) >= 3 for x in set(d))
 
 def check_small_straight(d): 
-    # 重複を除去して昇順に並べる
-    unique_sorted = sorted(list(set(d)))
-    # 1-2-3-4, 2-3-4-5, 3-4-5-6 のいずれかを含んでいるか
-    sets = [{1,2,3,4}, {2,3,4,5}, {3,4,5,6}]
-    d_set = set(d)
-    return any(s.issubset(d_set) for s in sets)
+    # 重複を消して昇順ソート (例: [2,3,4,5,3] -> [2,3,4,5])
+    u = sorted(list(set(d)))
+    if len(u) < 4: return False
+    
+    # 連続した数字のカウントをチェック
+    count = 1
+    max_count = 1
+    for i in range(len(u)-1):
+        if u[i+1] == u[i] + 1:
+            count += 1
+        else:
+            count = 1
+        max_count = max(max_count, count)
+    return max_count >= 4
 
 def check_full_house(d): 
     counts = sorted([d.count(x) for x in set(d)])
-    # [2, 3] または [5] (ヤッツィーもフルハウスとして扱う)
     return counts == [2, 3] or counts == [5]
 
 def check_yahtzee(d): 
@@ -68,6 +75,7 @@ def get_innate_deck():
         Card("固有:アルティメット・エンド", "attack", 110, check_yahtzee)
     ]
 
+# --- 初期化 ---
 if 'deck' not in st.session_state:
     common_deck = []
     for _ in range(12): common_deck.append(Card("アイアン・シールド", "guard", 25, check_pair))
@@ -89,13 +97,12 @@ def switch_player():
     st.session_state.current_player = "P2" if st.session_state.current_player == "P1" else "P1"
     st.session_state.phase = "action"
     st.session_state.reroll_done = False
-    # ターン交代時に、これから行動するプレイヤーの防御値をリセット
     if st.session_state.current_player == "P1": st.session_state.p1["guard_value"] = 0
     else: st.session_state.p2["guard_value"] = 0
     st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
 
 # --- UI ---
-st.title("🎲 Yahtzee Tactics: Logic Fixed")
+st.title("🎲 Yahtzee Tactics: Final Logic Fixed")
 
 c1, c2 = st.columns(2)
 for i, (col, p_key) in enumerate(zip([c1, c2], ["p1", "p2"])):
@@ -106,7 +113,7 @@ for i, (col, p_key) in enumerate(zip([c1, c2], ["p1", "p2"])):
             <div class="player-box {'active-player' if is_active else ''}">
                 <h3>PLAYER {i+1}</h3>
                 <h2 style="color: #4CAF50;">HP: {p['hp']}</h2>
-                <p>Bonus: +{p['bonus']} | 🛡️防御中: {p['guard_value']} | 固有: {len(p['innate'])}枚 | 手札: {len(p['hand'])}/5</p>
+                <p>Bonus: +{p['bonus']} | 🛡️防御: {p['guard_value']} | 固有: {len(p['innate'])}枚 | 手札: {len(p['hand'])}/5</p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -118,7 +125,7 @@ dice_html = "".join([f'<div class="dice-icon">{DICE_ICONS[d]}</div>' for d in st
 st.markdown(f'<div class="dice-container">{dice_html}</div>', unsafe_allow_html=True)
 
 if st.session_state.phase == "action":
-    st.info(f"【{st.session_state.current_player} 移動フェーズ】")
+    st.info(f"【{st.session_state.current_player} 移動フェーズ】山札か攻撃か選んでください")
     cols = st.columns(2)
     can_draw = len(p_now["hand"]) < 5
     if cols[0].button("🎴 山札から引いて交代", use_container_width=True, disabled=not can_draw):
@@ -139,27 +146,24 @@ elif st.session_state.phase == "battle":
             st.session_state.reroll_done = True
             st.rerun()
 
-    # 出せるカード判定
+    # 判定
     all_available = []
-    # 固有カードのチェック
-    for c in p_now["innate"]:
+    for c in p_now["innate"] + p_now["hand"]:
         reason = get_satisfied_condition(st.session_state.dice, c.condition)
-        if reason: all_available.append((c, reason, "innate"))
-    # 手札カードのチェック
-    for c in p_now["hand"]:
-        reason = get_satisfied_condition(st.session_state.dice, c.condition)
-        if reason: all_available.append((c, reason, "hand"))
+        if reason:
+            source = "innate" if c in p_now["innate"] else "hand"
+            all_available.append((c, reason, source))
 
     if not all_available:
-        st.error("役が揃っていません！")
-        if st.button("ターン終了"):
+        st.error("役が揃っていません。")
+        if st.button("ターンを終了する"):
             switch_player()
             st.rerun()
     else:
         labels = [f"[{a[2].upper()}] {a[0].name} ({a[1]})" for a in all_available]
         choice = st.radio("発動するカード:", range(len(labels)), format_func=lambda x: labels[x])
         
-        if st.button("🔥 発動！", use_container_width=True):
+        if st.button("🔥 カード発動！", use_container_width=True):
             card, reason, source = all_available[choice]
             
             if card.type == "attack":
@@ -168,11 +172,11 @@ elif st.session_state.phase == "battle":
                 msg = f"{card.name}！ {dmg}ダメージ！"
                 if card.effect == "draw" and len(p_now["hand"]) < 5 and st.session_state.deck:
                     p_now["hand"].append(st.session_state.deck.pop())
-                    msg += "（追加ドロー！）"
+                    msg += "（ドロー成功！）"
                 add_log(msg)
             elif card.type == "guard":
                 p_now["guard_value"] = card.value
-                add_log(f"{card.name}！ ガード値{card.value}展開")
+                add_log(f"{card.name}！ ガード{card.value}展開")
             elif card.type == "heal":
                 p_now["hp"] += card.value
                 add_log(f"{card.name}！ {card.value}回復")
