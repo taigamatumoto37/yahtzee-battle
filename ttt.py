@@ -3,7 +3,7 @@ import random
 from collections import Counter
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Error Fixed", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Precise Logic", layout="wide")
 
 st.markdown("""
     <style>
@@ -29,53 +29,77 @@ st.markdown("""
 
 DICE_ICONS = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
 
-# --- 判定ロジック ---
-def get_counts(d): return Counter(d)
-def check_pair(d): return any(count >= 2 for count in get_counts(d).values())
-def check_three(d): return any(count >= 3 for count in get_counts(d).values())
-def check_small_straight(d): 
-    u = sorted(list(set(d)))
-    count = 1; max_count = 1
-    for i in range(len(u)-1):
-        if u[i+1] == u[i] + 1: count += 1
-        else: count = 1
-        max_count = max(max_count, count)
-    return max_count >= 4
-def check_full_house(d): 
-    counts = sorted(get_counts(d).values())
-    return counts == [2, 3] or counts == [5]
-def check_yahtzee(d): return len(set(d)) == 1
+# --- 判定ロジック (より堅牢な実装) ---
+def check_condition(dice, condition_func_name):
+    counts = Counter(dice).values()
+    unique_sorted = sorted(list(set(dice)))
+    
+    if condition_func_name == "check_pair":
+        return any(c >= 2 for c in counts)
+    
+    if condition_func_name == "check_three":
+        return any(c >= 3 for c in counts)
+    
+    if condition_func_name == "check_small_straight":
+        if len(unique_sorted) < 4: return False
+        consecutive = 1
+        max_consecutive = 1
+        for i in range(len(unique_sorted)-1):
+            if unique_sorted[i+1] == unique_sorted[i] + 1:
+                consecutive += 1
+            else:
+                consecutive = 1
+            max_consecutive = max(max_consecutive, consecutive)
+        return max_consecutive >= 4
+    
+    if condition_func_name == "check_full_house":
+        c_list = sorted(list(counts))
+        return c_list == [2, 3] or c_list == [5]
+    
+    if condition_func_name == "check_yahtzee":
+        return len(set(dice)) == 1
+    
+    return False
 
-def get_satisfied_condition(d, condition_func):
-    if condition_func == check_pair and check_pair(d): return "ワンペア"
-    if condition_func == check_three and check_three(d): return "スリーカード"
-    if condition_func == check_small_straight and check_small_straight(d): return "Sストレート"
-    if condition_func == check_full_house and check_full_house(d): return "フルハウス"
-    if condition_func == check_yahtzee and check_yahtzee(d): return "ヤッツィー"
+# 役の名前を返す
+def get_reason_text(dice, condition_func_name):
+    names = {
+        "check_pair": "ワンペア",
+        "check_three": "スリーカード",
+        "check_small_straight": "Sストレート",
+        "check_full_house": "フルハウス",
+        "check_yahtzee": "ヤッツィー"
+    }
+    if check_condition(dice, condition_func_name):
+        return names.get(condition_func_name)
     return None
 
 class Card:
-    def __init__(self, name, ctype, value, condition, effect=None):
-        self.name, self.type, self.value, self.condition, self.effect = name, ctype, value, condition, effect
+    def __init__(self, name, ctype, value, condition_name, effect=None):
+        self.name = name
+        self.type = ctype
+        self.value = value
+        self.condition_name = condition_name # 関数そのものではなく名前に変更
+        self.effect = effect
 
 def get_innate_deck():
     return [
-        Card("固有:クイック・一閃", "attack", 10, check_pair, effect="draw"),
-        Card("固有:スカウト・斬撃", "attack", 10, check_pair, effect="draw"),
-        Card("固有:連撃・双刃", "attack", 20, check_pair),
-        Card("固有:連撃・三刃", "attack", 35, check_three),
-        Card("固有:ストレート・ブレイク", "attack", 45, check_small_straight),
-        Card("固有:ストレート・エッジ", "attack", 45, check_small_straight),
-        Card("固有:フルハウス・インパクト", "attack", 70, check_full_house),
-        Card("固有:アルティメット・エンド", "attack", 110, check_yahtzee)
+        Card("固有:クイック・一閃", "attack", 10, "check_pair", effect="draw"),
+        Card("固有:スカウト・斬撃", "attack", 10, "check_pair", effect="draw"),
+        Card("固有:連撃・双刃", "attack", 20, "check_pair"),
+        Card("固有:連撃・三刃", "attack", 35, "check_three"),
+        Card("固有:ストレート・ブレイク", "attack", 45, "check_small_straight"),
+        Card("固有:ストレート・エッジ", "attack", 45, "check_small_straight"),
+        Card("固有:フルハウス・インパクト", "attack", 70, "check_full_house"),
+        Card("固有:アルティメット・エンド", "attack", 110, "check_yahtzee")
     ]
 
 # --- 初期化 ---
 if 'deck' not in st.session_state:
     common_deck = []
-    for _ in range(15): common_deck.append(Card("アイアン・シールド", "guard", 25, check_pair))
-    for _ in range(10): common_deck.append(Card("癒しのハーブ", "heal", 30, check_pair))
-    for _ in range(5):  common_deck.append(Card("強襲・大剣", "attack", 55, check_three))
+    for _ in range(15): common_deck.append(Card("アイアン・シールド", "guard", 25, "check_pair"))
+    for _ in range(10): common_deck.append(Card("癒しのハーブ", "heal", 30, "check_pair"))
+    for _ in range(5):  common_deck.append(Card("強襲・大剣", "attack", 55, "check_three"))
     random.shuffle(common_deck)
     st.session_state.update({
         'deck': common_deck, 
@@ -94,7 +118,6 @@ def switch_player():
 # --- メインレイアウト ---
 st.markdown("<h1 class='main-header'>⚔️ YAHTZEE TACTICS ⚔️</h1>", unsafe_allow_html=True)
 
-# 現在のプレイヤーと相手を特定
 p_now = st.session_state.p1 if st.session_state.current_player == "P1" else st.session_state.p2
 p_opp = st.session_state.p2 if st.session_state.current_player == "P1" else st.session_state.p1
 
@@ -131,18 +154,25 @@ elif st.session_state.phase == "battle":
             st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
             st.session_state.reroll_done = True; st.rerun()
 
+    # 出せるカードを全スキャン
     all_cards = []
-    # 固有と手札を合わせて判定
-    for c in p_now["innate"] + p_now["hand"]:
-        reason = get_satisfied_condition(st.session_state.dice, c.condition)
-        if reason:
-            source = "innate" if c in p_now["innate"] else "hand"
-            all_cards.append((c, reason, source))
+    current_dice = st.session_state.dice
+    
+    # 固有カードスキャン
+    for c in p_now["innate"]:
+        reason = get_reason_text(current_dice, c.condition_name)
+        if reason: all_cards.append((c, reason, "innate"))
+        
+    # 手札スキャン
+    for c in p_now["hand"]:
+        reason = get_reason_text(current_dice, c.condition_name)
+        if reason: all_cards.append((c, reason, "hand"))
 
     if not all_cards:
         st.error("役が揃いませんでした。")
         if st.button("ターン終了", use_container_width=True): switch_player(); st.rerun()
     else:
+        st.write("### 発動可能なカードを選択してください：")
         cols = st.columns(len(all_cards) if len(all_cards) <= 4 else 4)
         for idx, (card, reason, source) in enumerate(all_cards):
             with cols[idx % 4]:
