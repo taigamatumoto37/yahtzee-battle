@@ -10,10 +10,20 @@ st.markdown("""
     .player-box { padding: 20px; border-radius: 15px; border: 2px solid #343a40; background-color: #161b22; margin-bottom: 10px; }
     .active-player { border: 2px solid #00ff00 !important; background-color: #0d2a1d !important; }
     .dice-val { font-size: 50px; font-weight: bold; color: #ffeb3b; letter-spacing: 15px; text-align: center; background: #2d333b; border-radius: 10px; padding: 10px; margin: 10px 0; }
+    .condition-tag { font-size: 0.8em; color: #00d4ff; background: #1a2a3a; padding: 2px 8px; border-radius: 4px; margin-left: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 判定関数 ---
+# --- 判定関数（役の名前を返すように拡張） ---
+def get_satisfied_condition(d, condition_func):
+    """ダイスと判定関数を渡し、成立していればその役名を返す"""
+    if condition_func == check_pair and check_pair(d): return "ワンペア以上"
+    if condition_func == check_three and check_three(d): return "スリーカード"
+    if condition_func == check_straight and check_straight(d): return "ストレート"
+    if condition_func == check_full_house and check_full_house(d): return "フルハウス"
+    if condition_func == check_yahtzee and check_yahtzee(d): return "ヤッツィー(ALL)"
+    return None
+
 def check_pair(d): return any(d.count(x) >= 2 for x in set(d))
 def check_three(d): return any(d.count(x) >= 3 for x in set(d))
 def check_straight(d): 
@@ -46,7 +56,11 @@ if 'deck' not in st.session_state:
         'phase': "action", 'reroll_done': False, 'log': ["バトル開始！"]
     })
 
-innate_cards = [Card("固有:トリニティ", "attack", 20, check_three, "固有"), Card("固有:五連光破斬", "attack", 25, check_straight, "固有"), Card("固有:神罰の五連星", "attack", 50, check_yahtzee, "固有")]
+innate_cards = [
+    Card("固有:トリニティ", "attack", 20, check_three, "固有"), 
+    Card("固有:五連光破斬", "attack", 25, check_straight, "固有"), 
+    Card("固有:神罰の五連星", "attack", 50, check_yahtzee, "固有")
+]
 
 def add_log(msg): st.session_state.log.insert(0, msg)
 
@@ -108,43 +122,54 @@ elif st.session_state.phase == "battle":
             add_log(f"{st.session_state.current_player} がダイスを振り直した")
             st.rerun()
 
+    # 使用可能カードと「成立した役の名前」を取得
     pool = [c for c in innate_cards if c.name not in p_now["used_innate"]] + p_now["hand"]
-    available = [c for c in pool if c.condition(st.session_state.dice)]
+    
+    # 利用可能なカードを「(カード, 成立した役名)」のペアでリスト化
+    available_with_reason = []
+    for c in pool:
+        reason = get_satisfied_condition(st.session_state.dice, c.condition)
+        if reason:
+            available_with_reason.append((c, reason))
 
-    if not available:
+    if not available_with_reason:
         st.error("役が揃いませんでした！")
-        # 役が出なかった場合：手札があればドロー、なければ廃棄かパス
         if len(p_now["hand"]) < 5:
             if st.button("🎴 代わりにカードをドローして終了", use_container_width=True):
                 if st.session_state.deck:
                     card = st.session_state.deck.pop()
                     p_now["hand"].append(card)
-                    add_log(f"役が揃わず、{st.session_state.current_player} はドローを選択した")
+                    add_log(f"役不足のためドローを選択")
                     switch_player()
                     st.rerun()
         
         if p_now["hand"]:
-            discard_idx = st.selectbox("または廃棄するカードを選択:", range(len(p_now["hand"])), format_func=lambda x: p_now["hand"][x].name)
+            discard_idx = st.selectbox("廃棄するカードを選択:", range(len(p_now["hand"])), format_func=lambda x: p_now["hand"][x].name)
             if st.button("🗑️ 廃棄して交代"):
                 c = p_now["hand"].pop(discard_idx)
-                add_log(f"役が揃わず {c.name} を捨てた")
+                add_log(f"役不足のため {c.name} を捨てた")
                 switch_player()
                 st.rerun()
         elif st.button("パスする"):
             switch_player()
             st.rerun()
     else:
-        selected_idx = st.radio("技を選択:", range(len(available)), format_func=lambda x: f"{available[x].name} - 威力:{available[x].power}")
+        # カード名と役名をセットで表示
+        selected_idx = st.radio(
+            "技を選択（成立している役が表示されています）:", 
+            range(len(available_with_reason)), 
+            format_func=lambda x: f"{available_with_reason[x][0].name} 【成立：{available_with_reason[x][1]}】 (威力:{available_with_reason[x][0].power})"
+        )
+        
         if st.button("🔥 発動！", use_container_width=True):
-            card = available[selected_idx]
-            if card.type == "attack": p_opp["hp"] -= (card.power + p_now["bonus"]); add_log(f"{card.name}！ {card.power + p_now["bonus"]}ダメ")
-            elif card.type == "heal": p_now["hp"] += card.power; add_log(f"{card.name}！ {card.power}回復")
+            card, reason = available_with_reason[selected_idx]
+            if card.type == "attack": p_opp["hp"] -= (card.power + p_now["bonus"]); add_log(f"{card.name}({reason})！ {card.power + p_now["bonus"]}ダメ")
+            elif card.type == "heal": p_now["hp"] += card.power; add_log(f"{card.name}({reason})！ {card.power}回復")
             elif card.type == "status": 
                 s_name, s_turn = card.status_effect
                 p_opp["statuses"][s_name] = s_turn
-                add_log(f"{card.name}！ 相手を{s_name}状態にした")
+                add_log(f"{card.name}({reason})！ 相手を{s_name}に！")
 
-            # 消費
             found = False
             for i, h_card in enumerate(p_now["hand"]):
                 if h_card is card: p_now["hand"].pop(i); found = True; break
