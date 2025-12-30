@@ -4,7 +4,7 @@ import time
 from collections import Counter
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Poison Fixed", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Damage Preview", layout="wide")
 
 st.markdown("""
     <style>
@@ -28,6 +28,7 @@ st.markdown("""
 
 DICE_ICONS = {1: "⚀", 2: "⚁", 3: "⚂", 4: "⚃", 5: "⚄", 6: "⚅"}
 
+# --- ロジック ---
 def check_condition(dice, condition_name):
     counts = Counter(dice).values()
     u = sorted(list(set(dice)))
@@ -66,6 +67,7 @@ def get_innate_deck():
         Card("固有:神域", "attack", 150, "check_yahtzee")
     ]
 
+# --- 初期化 ---
 if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリセット"):
     common_deck = []
     for _ in range(15): common_deck.append(Card("追撃・小剣", "attack", 25, "check_pair"))
@@ -157,6 +159,8 @@ if st.session_state.phase == "action":
 
 elif st.session_state.phase == "battle":
     p_now = st.session_state[st.session_state.current_player.lower()]
+    p_opp = st.session_state["p2" if st.session_state.current_player == "P1" else "p1"]
+    
     st.write("### 🎲 運命の刻印")
     d_cols = st.columns(5)
     for i, d in enumerate(st.session_state.dice):
@@ -179,13 +183,25 @@ elif st.session_state.phase == "battle":
         grid = st.columns(3)
         for idx, (card, reason, tag) in enumerate(available):
             with grid[idx % 3]:
-                st.write(f"**{card.name}**")
+                st.markdown(f"**{card.name}**")
+                # ダメージ表示の追加
+                if card.type == "attack":
+                    total_dmg = max(0, card.value + p_now["bonus"] - p_opp["guard"])
+                    st.markdown(f":red[威力: {total_dmg}] (基本{card.value} + 強化{p_now['bonus']})")
+                elif card.type == "status" and card.effect == "poison":
+                    st.markdown(f":violet[毒付与: {card.value}] ({card.duration}ターン)")
+                elif card.type == "heal":
+                    st.markdown(f":green[回復量: {card.value}]")
+                elif card.type == "guard":
+                    st.markdown(f":blue[防御力: {card.value}]")
+                
+                st.caption(f"条件: {reason}")
+                
                 if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
                     if card.type in ["attack", "status"] and card.effect != "regen":
                         st.session_state.pending_action = {"card": card, "source": tag}
                         st.session_state.phase = "counter"; st.rerun()
                     else:
-                        # 回復・再生の即時処理
                         if card.type == "heal": p_now["hp"] = min(150, p_now["hp"] + card.value)
                         elif card.type == "guard": p_now["guard"] = card.value
                         elif card.type == "status" and card.effect == "regen":
@@ -206,7 +222,7 @@ elif st.session_state.phase == "counter":
 
     st.subheader(f"🛡️ 防御確認")
     base_dmg = card.value + p_now["bonus"] if card.type == "attack" else 0
-    st.warning(f"{card.name} が発動！")
+    st.warning(f"{card.name} が発動中！")
     
     guards = [c for c in p_opp["hand"] if c.type == "guard"]
     options = ["防御しない"] + [f"{g.name} ({g.value}軽減)" for g in guards]
@@ -217,11 +233,10 @@ elif st.session_state.phase == "counter":
         g_val = guards[options.index(choice) - 1].value
     
     final_dmg = max(0, base_dmg - g_val)
-    if card.type == "attack": st.metric("ダメージ予定", final_dmg)
+    if card.type == "attack": st.metric("ダメージ予定", final_dmg, delta=-g_val)
 
     if st.button("結果を確定", type="primary", use_container_width=True):
         if g_val > 0: p_opp["hand"].remove(guards[options.index(choice) - 1])
-        # 毒の付与をここに追加
         if card.type == "status":
             p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
             add_log("☣️", f"{opp_key.upper()} は毒に侵された！")
@@ -232,5 +247,3 @@ elif st.session_state.phase == "counter":
         if action["source"] == "固有":
             p_now["innate"].remove(card)
             if not p_now["innate"]: p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
-        else: p_now["hand"].remove(card)
-        switch_player(); st.rerun()
