@@ -3,15 +3,13 @@ import random
 from collections import Counter
 
 # --- ページ設定 ---
-st.set_page_config(page_title="Yahtzee Tactics: Luxury", layout="wide")
+st.set_page_config(page_title="Yahtzee Tactics: Strategic Defense", layout="wide")
 
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e14; color: #ffffff; }
     h1, h2, h3, p, label { color: #ffffff !important; }
     div[data-testid="stMetricValue"] > div { color: #00ffaa !important; }
-    /* ログの装飾 */
-    .log-container { border-left: 3px solid #00ffaa; padding-left: 15px; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -76,8 +74,8 @@ if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリ�
         'winner': None, 'pending_action': None
     })
 
-def add_log(icon, msg, ltype="info"):
-    st.session_state.log_entries.insert(0, {"icon": icon, "msg": msg, "type": ltype})
+def add_log(icon, msg):
+    st.session_state.log_entries.insert(0, {"icon": icon, "msg": msg})
 
 def process_status_effects(player_key):
     p = st.session_state[player_key]
@@ -85,10 +83,10 @@ def process_status_effects(player_key):
     for s in p["status"]:
         if s["type"] == "poison":
             p["hp"] -= s["value"]
-            add_log("☣️", f"{player_key}に毒の蝕み: {s['value']} ダメージ", "error")
+            add_log("☣️", f"{player_key}に毒の蝕み: {s['value']} ダメージ")
         elif s["type"] == "regen":
             p["hp"] = min(150, p["hp"] + s["value"])
-            add_log("💖", f"{player_key}の生命力が活性化: {s['value']} 回復", "success")
+            add_log("💖", f"{player_key}の再生: {s['value']} 回復")
         s["duration"] -= 1
         if s["duration"] > 0: new_status.append(s)
     p["status"] = new_status
@@ -104,13 +102,12 @@ def switch_player():
     st.session_state.dice = [random.randint(1, 6) for _ in range(5)]
     st.session_state.pending_action = None
 
-# --- UI Layout ---
+# --- UI ---
 st.title("⚔️ YAHTZEE TACTICS ⚔️")
 
-# サイドバーに高級ログを表示
 with st.sidebar:
     st.header("📜 戦況記録書")
-    for entry in st.session_state.log_entries:
+    for entry in st.session_state.log_entries[:15]:
         with st.chat_message("user", avatar=entry["icon"]):
             st.write(entry["msg"])
 
@@ -120,7 +117,6 @@ if st.session_state.winner:
         del st.session_state['deck']; st.rerun()
     st.stop()
 
-# プレイヤー情報
 cols = st.columns(2)
 for i, (col, key) in enumerate(zip(cols, ["p1", "p2"])):
     p = st.session_state[key]
@@ -130,20 +126,19 @@ for i, (col, key) in enumerate(zip(cols, ["p1", "p2"])):
         st.write(f"⚔️ ATK Bonus: +{p['bonus']} | 🛡️ Shield: {p['guard']}")
         for s in p["status"]:
             color = "violet" if s["type"]=="poison" else "green"
-            st.markdown(f":{color}[[{'毒' if s['type']=='poison' else '再生'}] {s['value']} ダメージ/回復 (あと{s['duration']}T)]")
+            st.markdown(f":{color}[[{'毒' if s['type']=='poison' else '再生'}] {s['value']} (あと{s['duration']}T)]")
 
 st.divider()
 
-# フェーズ管理
 if st.session_state.phase == "action":
-    st.info(f"👉 待機中: {st.session_state.current_player}")
+    st.info(f"👉 ターン: {st.session_state.current_player}")
     c1, c2 = st.columns(2)
     with c1:
         if st.button("🎴 魔導書よりカードを引く", use_container_width=True, type="primary"):
             p = st.session_state[st.session_state.current_player.lower()]
             if st.session_state.deck and len(p["hand"]) < 5:
                 p["hand"].append(st.session_state.deck.pop())
-                add_log("🎴", f"{st.session_state.current_player} が英知（カード）を授かった。")
+                add_log("🎴", f"{st.session_state.current_player} がカードを引いた。")
                 switch_player(); st.rerun()
     with c2:
         if st.button("⚔️ 決闘を開始する", use_container_width=True, type="primary"):
@@ -152,11 +147,10 @@ if st.session_state.phase == "action":
 elif st.session_state.phase == "battle":
     p_now = st.session_state[st.session_state.current_player.lower()]
     p_opp = st.session_state["p2" if st.session_state.current_player == "P1" else "p1"]
-    
     d_cols = st.columns(5)
     for i, d in enumerate(st.session_state.dice): d_cols[i].markdown(f"## {DICE_ICONS[d]}")
     if not st.session_state.reroll_done:
-        if st.button("🎲 運命のダイスを振り直す"):
+        if st.button("🎲 振り直す"):
             st.session_state.dice = [random.randint(1, 6) for _ in range(5)]; st.session_state.reroll_done = True; st.rerun()
 
     st.write("---")
@@ -169,8 +163,8 @@ elif st.session_state.phase == "battle":
         if reason: available.append((c, reason, "手札"))
 
     if not available:
-        st.warning("発動可能な秘術がありません。")
-        if st.button("静かにターンを終える", type="primary"): switch_player(); st.rerun()
+        st.warning("発動可能な技がありません。")
+        if st.button("ターン終了", type="primary"): switch_player(); st.rerun()
     else:
         grid = st.columns(3)
         for idx, (card, reason, source) in enumerate(available):
@@ -179,13 +173,11 @@ elif st.session_state.phase == "battle":
                 if card.type == "attack":
                     total = max(0, card.value + p_now["bonus"] - p_opp["guard"])
                     st.markdown(f":red[威力: {total}] ({reason})")
-                elif card.type == "heal":
-                    st.markdown(f":green[回復: {card.value}] ({reason})")
+                elif card.type == "heal": st.markdown(f":green[回復: {card.value}] ({reason})")
                 elif card.type == "status":
                     color = "violet" if card.effect == "poison" else "green"
-                    st.markdown(f":{color}[特殊効果: {card.value}] ({reason})")
-                else:
-                    st.markdown(f":blue[護身: {card.value}] ({reason})")
+                    st.markdown(f":{color}[効果: {card.value}] ({reason})")
+                else: st.markdown(f":blue[護身: {card.value}] ({reason})")
                 
                 if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
                     if card.type in ["attack", "status"] and card.effect != "regen":
@@ -194,51 +186,73 @@ elif st.session_state.phase == "battle":
                     else:
                         if card.type == "heal": 
                             p_now["hp"] = min(150, p_now["hp"] + card.value)
-                            add_log("💖", f"{card.name}により {card.value} HPが回復した。")
+                            add_log("💖", f"{card.name}で {card.value} 回復")
                         elif card.type == "guard": 
                             p_now["guard"] = card.value
-                            add_log("🛡️", f"{card.name}を展開。守備を固める。")
+                            add_log("🛡️", f"{card.name}で防御姿勢")
                         elif card.type == "status" and card.effect == "regen":
                             p_now["status"].append({"type": "regen", "value": card.value, "duration": card.duration})
-                            add_log("✨", f"再生の香りが漂う。")
+                            add_log("✨", f"再生効果が発動")
                         
                         if source == "固有":
                             p_now["innate"].remove(card)
                             if not p_now["innate"]:
                                 p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
-                                add_log("🔥", "全固有カードを使い切り、真の力が覚醒した！", "warning")
+                                add_log("🔥", "覚醒！固有復活＆ATK+10")
                         else: p_now["hand"].remove(card)
                         switch_player(); st.rerun()
 
 elif st.session_state.phase == "counter":
-    opp_key = "p2" if st.session_state.current_player == "P1" else "p1"
+    atk_id = st.session_state.current_player
+    opp_key = "p2" if atk_id == "P1" else "p1"
+    p_now = st.session_state[atk_id.lower()]
     p_opp = st.session_state[opp_key]
-    st.warning(f"🛡️ 守備確認: {opp_key.upper()} は対抗手段を講じますか？")
-    guards = [c for c in p_opp["hand"] if c.type == "guard"]
-    options = ["対抗しない", "鉄壁の盾を使用"] # ブラフを維持
-    choice = st.radio("選択:", options)
+    action = st.session_state.pending_action
+    card = action["card"]
 
-    if st.button("結果を確定させる", type="primary", use_container_width=True):
-        action = st.session_state.pending_action
-        card = action["card"]
-        p_now = st.session_state[st.session_state.current_player.lower()]
-        g_val = 0
-        if "鉄壁の盾" in choice and guards:
-            g_card = guards[0]; g_val = g_card.value; p_opp["hand"].remove(g_card)
-            add_log("🛡️", f"{opp_key.upper()} は盾で衝撃を和らげた。")
+    st.subheader(f"🛡️ 防御フェーズ (攻撃手: {atk_id})")
+    
+    # 攻撃情報の表示
+    base_dmg = card.value + p_now["bonus"]
+    st.error(f"⚠️ {atk_id} の攻撃: **{card.name}** (基本威力: {base_dmg})")
+    
+    # 防御側の選択
+    guards = [c for c in p_opp["hand"] if c.type == "guard"]
+    options = ["防御しない (0軽減)"] + [f"{g.name} ({g.value}軽減)" for g in guards]
+    choice = st.radio("使用するガードカードを選択してください:", options)
+
+    # ダメージ計算の可視化
+    g_val = 0
+    if "防御しない" not in choice:
+        g_idx = options.index(choice) - 1
+        g_val = guards[g_idx].value
+    
+    final_dmg = max(0, base_dmg - g_val)
+    
+    # 計算結果を大きく表示
+    st.write("---")
+    res_c1, res_c2, res_c3 = st.columns(3)
+    res_c1.metric("相手の攻撃力", base_dmg)
+    res_c2.metric("あなたのガード", f"- {g_val}")
+    res_c3.metric("最終ダメージ", final_dmg, delta=-g_val, delta_color="normal")
+
+    if st.button("この結果を受け入れる", type="primary", use_container_width=True):
+        if g_val > 0:
+            g_card = guards[g_idx]
+            p_opp["hand"].remove(g_card)
+            add_log("🛡️", f"{opp_key.upper()} はガードを使用した。")
         
         if card.type == "attack":
-            dmg = max(0, (card.value + p_now["bonus"]) - g_val)
-            p_opp["hp"] -= dmg
-            add_log("💥", f"{card.name}が炸裂！ {dmg} の痛撃！")
+            p_opp["hp"] -= final_dmg
+            add_log("💥", f"{card.name}が命中！ {final_dmg} ダメージ")
         elif card.type == "status":
             p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
-            add_log("☣️", f"不吉な波動が {opp_key.upper()} を襲う。")
+            add_log("☣️", f"{opp_key.upper()} は毒に侵された。")
 
         if action["source"] == "固有":
             p_now["innate"].remove(card)
             if not p_now["innate"]:
                 p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
-                add_log("🔥", "覚醒の時。全能力が底上げされる！")
+                add_log("🔥", "覚醒！固有復活＆ATK+10")
         else: p_now["hand"].remove(card)
         switch_player(); st.rerun()
