@@ -263,6 +263,8 @@ elif st.session_state.phase == "battle":
                             add_log("🔥", "覚醒！固有復活")
                         
                         switch_player(); st.rerun()
+
+                        
                         elif st.session_state.phase == "counter":
                             atk_id = st.session_state.current_player
                             opp_key = "p2" if atk_id == "P1" else "p1"
@@ -319,6 +321,7 @@ elif st.session_state.phase == "battle":
 
                                 switch_player()
                                 st.rerun()
+
 
 
 
