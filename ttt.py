@@ -49,7 +49,7 @@ def check_condition(dice, condition_name):
     return False
 
 def get_reason_text(dice, condition_name):
-    names = {"check_pair": "ペア", "check_three": "三枚", "check_small_straight": "Sスト", "check_full_house": "フルハ", "check_yahtzee": "ヤッツィー"}
+    names = {"check_pair": "ワンペア", "check_three": "スリーカード", "check_small_straight": "Sスト", "check_full_house": "フルハウス", "check_yahtzee": "ヤッツィー"}
     return names.get(condition_name) if check_condition(dice, condition_name) else None
 
 class Card:
@@ -312,6 +312,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
