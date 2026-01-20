@@ -58,14 +58,14 @@ class Card:
 
 def get_innate_deck():
     return [
-        Card("固有:一閃", "attack", 25, "check_pair"),
-        Card("固有:双刃", "attack", 35, "check_pair"),
+        Card("固有:一閃", "attack", 15, "check_pair"),
+        Card("固有:双刃", "attack", 25, "check_pair"),
         Card("固有:癒歌", "heal", 30, "check_pair"),
-        Card("固有:毒液", "status", 12, "check_pair", effect="poison", duration=3),
-        Card("固有:強撃", "attack", 55, "check_three"),
-        Card("固有:爆裂", "attack", 80, "check_small_straight"),
-        Card("固有:絶技", "attack", 110, "check_full_house"),
-        Card("固有:神域", "attack", 160, "check_yahtzee")
+        Card("固有:毒液", "status", 10, "check_pair", effect="poison", duration=3),
+        Card("固有:強撃", "attack", 45, "check_three"),
+        Card("固有:爆裂", "attack", 70, "check_small_straight"),
+        Card("固有:絶技", "attack", 90, "check_full_house"),
+        Card("固有:神域", "attack", 150, "check_yahtzee")
     ]
 
 # --- 初期化 ---
@@ -77,7 +77,6 @@ if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリ�
     for _ in range(5):  common_deck.append(Card("癒しのハーブ", "heal", 35, "check_pair"))
     for _ in range(3):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3))
     for _ in range(4):  common_deck.append(Card("猛毒の粉末", "status", 12, "check_pair", effect="poison", duration=3))
-    for _ in range(5):  common_deck.append(Card("攻撃強化", "status", 10, "check_pair", effect="buff", duration=3))
     random.shuffle(common_deck)
     initial_dice = [random.randint(1, 6) for _ in range(5)]
     initial_dice.sort() # 初期ダイスをソート
@@ -209,32 +208,21 @@ elif st.session_state.phase == "battle":
                 elif card.type == "guard": st.markdown(f":blue[防御: {card.value}]")
                 
                 st.caption(f"条件: {reason}")
-            if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
-
-                if card.type == "attack" or (card.type == "status" and card.effect in ["poison"]):
-                    st.session_state.pending_action = {"card": card, "source": tag}
-                    st.session_state.phase = "counter"
-                    st.rerun()
-                else:
-                    if card.type == "heal":
-                        p_now["hp"] = min(150, p_now["hp"] + card.value)
-                    elif card.type == "guard":
-                        p_now["guard"] = card.value
-                    elif card.type == "status" and card.effect == "regen":
-                        p_now["status"].append({
-                            "type": "regen",
-                            "value": card.value,
-                            "duration": card.duration
-                        })
-                    elif card.type == "status" and card.effect == "buff":
-                     p_now["bonus"] += card.value
-
-    
+                
+                if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
+                    if card.type in ["attack", "status"] and card.effect != "regen":
+                        st.session_state.pending_action = {"card": card, "source": tag}
+                        st.session_state.phase = "counter"; st.rerun()
+                    else:
+                        if card.type == "heal": p_now["hp"] = min(150, p_now["hp"] + card.value)
+                        elif card.type == "guard": p_now["guard"] = card.value
+                        elif card.type == "status" and card.effect == "regen":
+                            p_now["status"].append({"type": "regen", "value": card.value, "duration": card.duration})
                         
-                    target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
-                    for i, item in enumerate(target_list):
-                        if item.name == card.name:
-                            target_list.pop(i); break
+                        target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
+                        for i, item in enumerate(target_list):
+                            if item.name == card.name:
+                                target_list.pop(i); break
                         
                         if tag == "固有" and not p_now["innate"]:
                             p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
@@ -285,9 +273,3 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
-
-
-
-
-
-
