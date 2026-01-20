@@ -209,22 +209,23 @@ elif st.session_state.phase == "battle":
                 elif card.type == "guard": st.markdown(f":blue[防御: {card.value}]")
                 
                 st.caption(f"条件: {reason}")
-                
-               if card.type == "attack" or (card.type == "status" and card.effect in ["poison"]):
+            if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
+
+                if card.type == "attack" or (card.type == "status" and card.effect in ["poison"]):
                     st.session_state.pending_action = {"card": card, "source": tag}
                     st.session_state.phase = "counter"
                     st.rerun()
                 else:
-                if card.type == "heal":
-                    p_now["hp"] = min(150, p_now["hp"] + card.value)
-                elif card.type == "guard":
-                    p_now["guard"] = card.value
-                elif card.type == "status" and card.effect == "regen":
-                    p_now["status"].append({
-                        "type": "regen",
-                        "value": card.value,
-                        "duration": card.duration
-                    })
+                    if card.type == "heal":
+                        p_now["hp"] = min(150, p_now["hp"] + card.value)
+                    elif card.type == "guard":
+                        p_now["guard"] = card.value
+                    elif card.type == "status" and card.effect == "regen":
+                        p_now["status"].append({
+                            "type": "regen",
+                            "value": card.value,
+                            "duration": card.duration
+                        })
                 elif card.type == "status" and card.effect == "buff":
                      p_now["bonus"] += card.value
 
@@ -284,5 +285,6 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
