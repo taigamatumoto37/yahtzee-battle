@@ -100,9 +100,7 @@ def process_status_effects(player_key):
     new_status = []
     for s in p["status"]:
         if s["type"] == "poison":
-            p["hp"] -= s["value"]; add_log("☣️", f"{player_key}に毒ダメージ: {s['value']}")
-        elif card.type == "status" and card.effect == "buff":
-            p_now["bonus"] += card.value
+            p["hp"] -= s["value"]; add_log("☣️", f"{player_key}に毒ダメージ: {s['value']}")   
 
         elif s["type"] == "regen":
             p["hp"] = min(150, p["hp"] + s["value"]); add_log("💖", f"{player_key}が再生回復: {s['value']}")
@@ -187,7 +185,7 @@ elif st.session_state.phase == "battle":
             ph.empty()
             
             final_dice = [random.randint(1, 6) for _ in range(5)]
-            final_dice.sort() # 振り直し後の結果をソート
+            final_dice.sort() 
             st.session_state.dice = final_dice
             st.session_state.reroll_done = True; st.rerun()
 
@@ -216,6 +214,7 @@ elif st.session_state.phase == "battle":
                 st.caption(f"条件: {reason}")
                 
                 if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
+                    target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
                     if card.type == "attack" or (card.type == "status" and card.effect == "poison"):
                         st.session_state.pending_action = {"card": card, "source": tag}
                         st.session_state.phase = "counter"; st.rerun()
@@ -224,7 +223,6 @@ elif st.session_state.phase == "battle":
                         elif card.type == "guard": p_now["guard"] = card.value
                         elif card.type == "status" and card.effect == "regen":
                             p_now["status"].append({"type": "regen","value": card.value,"duration": card.duration})
-                            target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
                             add_log("🔥", f"攻撃力 +{card.value}")
                         
                         for i, item in enumerate(target_list):
@@ -281,6 +279,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
