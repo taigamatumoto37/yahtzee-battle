@@ -226,7 +226,7 @@ elif st.session_state.phase == "battle":
                             "value": card.value,
                             "duration": card.duration
                         })
-                elif card.type == "status" and card.effect == "buff":
+                    elif card.type == "status" and card.effect == "buff":
                      p_now["bonus"] += card.value
 
     
@@ -285,6 +285,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
