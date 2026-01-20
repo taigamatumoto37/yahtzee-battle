@@ -263,51 +263,63 @@ elif st.session_state.phase == "battle":
                             add_log("🔥", "覚醒！固有復活")
                         
                         switch_player(); st.rerun()
-
-elif st.session_state.phase == "counter":
-    atk_id = st.session_state.current_player
-    opp_key = "p2" if atk_id == "P1" else "p1"
-    p_now, p_opp = st.session_state[atk_id.lower()], st.session_state[opp_key]
-    action = st.session_state.pending_action
-    card = action["card"]
-
-    st.subheader(f"🛡️ 防御確認")
-    base_dmg = card.value + p_now["bonus"] if card.type == "attack" else 0
+                        elif st.session_state.phase == "counter":
+                            atk_id = st.session_state.current_player
+                            opp_key = "p2" if atk_id == "P1" else "p1"
+                            p_now, p_opp = st.session_state[atk_id.lower()], st.session_state[opp_key]
     
-    guards = [c for c in p_opp["hand"] if c.type == "guard"]
-    options = ["防御しない"] + [f"{g.name} ({g.value}軽減)" for g in guards]
-    choice = st.radio("ガード選択:", options)
+                            action = st.session_state.pending_action
+                            card = action["card"]
+                            source_tag = action["source"]  # Use the tag stored in the pending action
 
-    g_val = 0
-    if "防御しない" not in choice:
-        g_val = guards[options.index(choice) - 1].value
+                            st.subheader(f"🛡️ 防御確認")
+                            base_dmg = card.value + p_now["bonus"] if card.type == "attack" else 0
     
-    final_dmg = max(0, base_dmg - g_val)
-    if card.type == "attack": st.metric("ダメージ予定", final_dmg, delta=-g_val)
+                            guards = [c for c in p_opp["hand"] if c.type == "guard"]
+                            options = ["防御しない"] + [f"{g.name} ({g.value}軽減)" for g in guards]
+                            choice = st.radio("ガード選択:", options)
 
-    if st.button("結果を確定", type="primary", use_container_width=True):
-        if g_val > 0:
-            for i, c in enumerate(p_opp["hand"]):
-                if c.name == guards[options.index(choice)-1].name:
-                    p_opp["hand"].pop(i); break
+                            g_val = 0
+                            if "防御しない" not in choice:
+                                g_val = guards[options.index(choice) - 1].value
+    
+                            final_dmg = max(0, base_dmg - g_val)
+                            if card.type == "attack": 
+                                st.metric("ダメージ予定", final_dmg, delta=-g_val)
+
+                            if st.button("結果を確定", type="primary", use_container_width=True):
+                                # 1. Handle Defense Card Consumption
+                                if g_val > 0:
+                                    guard_name = guards[options.index(choice)-1].name
+                                    for i, c in enumerate(p_opp["hand"]):
+                                        if c.name == guard_name:
+                                            p_opp["hand"].pop(i)
+                                            break
         
-        if card.type == "status":
-            p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
-        elif card.type == "attack":
-            p_opp["hp"] -= final_dmg
-            add_log("💥", f"{final_dmg} ダメージ")
+        # 2. Apply Effects
+                                if card.type == "status":
+                                    p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
+                                elif card.type == "attack":
+                                    p_opp["hp"] -= final_dmg
+                                    add_log("💥", f"{final_dmg} ダメージ")
 
-        target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
+        # 3. Handle Attacker's Card Consumption (FIXED LINE)
+                                target_list = p_now["innate"] if source_tag == "固有" else p_now["hand"]
 
-        for i, item in enumerate(target_list):
-            if item.name == card.name:
-                target_list.pop(i); break
+                                for i, item in enumerate(target_list):
+                                    if item.name == card.name:
+                                        target_list.pop(i)
+                                        break
         
-        if action["source"] == "固有" and not p_now["innate"]:
-            p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
-            add_log("🔥", "覚醒！固有復活")
+        # 4. Check for Awakening
+                                if source_tag == "固有" and not p_now["innate"]:
+                                    p_now["innate"] = get_innate_deck()
+                                    p_now["bonus"] += 10
+                                    add_log("🔥", "覚醒！固有復活")
 
-        switch_player(); st.rerun()
+                                switch_player()
+                                st.rerun()
+
 
 
 
