@@ -165,53 +165,57 @@ if st.session_state.phase == "action":
 elif st.session_state.phase == "battle":
     p_now = st.session_state[st.session_state.current_player.lower()]
     p_opp = st.session_state["p2" if st.session_state.current_player == "P1" else "p1"]
-    
-st.write("### 🎲 運命の刻印（クリックで保持）")
-d_cols = st.columns(5)
 
-for i, d in enumerate(st.session_state.dice):
-    locked = st.session_state.locked[i]
-    style = "opacity:0.4; filter:grayscale(100%);" if locked else ""
-    
-    if d_cols[i].button(
-        f"{DICE_ICONS[d]}",
-        key=f"dice_{i}",
-        use_container_width=True
-    ):
-        st.session_state.locked[i] = not locked
-        st.rerun()
-    
-    d_cols[i].markdown(
-        f"<div style='{style} text-align:center; font-size:2.5rem;'>"
-        f"{'🔒' if locked else ''}"
-        f"</div>",
-        unsafe_allow_html=True
-    )
+    st.write("### 🎲 運命の刻印（クリックで保持）")
+    d_cols = st.columns(5)
 
-    
+    for i, d in enumerate(st.session_state.dice):
+        locked = st.session_state.locked[i]
+        style = "opacity:0.4; filter:grayscale(100%);" if locked else ""
+
+        if d_cols[i].button(
+            f"{DICE_ICONS[d]}",
+            key=f"dice_{i}",
+            use_container_width=True
+        ):
+            st.session_state.locked[i] = not locked
+            st.rerun()
+
+        d_cols[i].markdown(
+            f"<div style='{style} text-align:center; font-size:2.5rem;'>"
+            f"{'🔒' if locked else ''}"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
     if not st.session_state.reroll_done:
         if st.button("🎲 振り直す", type="primary", use_container_width=True):
-            # 演出用のランダム表示
             ph = st.empty()
             for _ in range(4):
                 tmp = [random.randint(1, 6) for _ in range(5)]
                 with ph.container():
                     cols_anim = st.columns(5)
-                    for idx, td in enumerate(tmp): cols_anim[idx].markdown(f'<div class="dice-box">{DICE_ICONS[td]}</div>', unsafe_allow_html=True)
+                    for idx, td in enumerate(tmp):
+                        cols_anim[idx].markdown(
+                            f'<div class="dice-box">{DICE_ICONS[td]}</div>',
+                            unsafe_allow_html=True
+                        )
                 time.sleep(0.1)
             ph.empty()
-            
-            final_dice = []
-	for i in range(5):
-    		if st.session_state.locked[i]:
-        		final_dice.append(st.session_state.dice[i])
-    		else:
-        		final_dice.append(random.randint(1, 6))
 
-            final_dice.sort() # 振り直し後の結果をソート
+            final_dice = []
+            for i in range(5):
+                if st.session_state.locked[i]:
+                    final_dice.append(st.session_state.dice[i])
+                else:
+                    final_dice.append(random.randint(1, 6))
+
+            final_dice.sort()
             st.session_state.dice = final_dice
-            st.session_state.reroll_done = True; st.rerun()
-	    st.session_state.locked = [False] * 5
+            st.session_state.locked = [False] * 5
+            st.session_state.reroll_done = True
+            st.rerun()
+
 
 
     st.write("---")
@@ -301,4 +305,5 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
