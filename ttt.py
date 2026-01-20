@@ -150,9 +150,13 @@ for i, (col, key) in enumerate(zip(cols, ["p1", "p2"])):
         for s in p["status"]:
             color = "violet" if s["type"]=="poison" else "green"
             st.markdown(f":{color}[[{'毒' if s['type']=='poison' else '再生'}] {s['value']} (残り{s['duration']}T)]")
+            
 
 st.divider()
 
+st.divider()
+
+# --- フェーズ管理: アクション ---
 if st.session_state.phase == "action":
     c1, c2 = st.columns(2)
     with c1:
@@ -161,10 +165,13 @@ if st.session_state.phase == "action":
             if st.session_state.deck and len(p["hand"]) < 5:
                 p["hand"].append(st.session_state.deck.pop())
                 switch_player(); st.rerun()
+            else:
+                st.warning("手札がいっぱいです！")
     with c2:
         if st.button("⚔️ 攻撃フェーズへ", use_container_width=True, type="primary"):
             st.session_state.phase = "battle"; st.rerun()
 
+# --- フェーズ管理: バトル（ダイス振りとカード選択） ---
 elif st.session_state.phase == "battle":
     p_now = st.session_state[st.session_state.current_player.lower()]
     p_opp = st.session_state["p2" if st.session_state.current_player == "P1" else "p1"]
@@ -176,65 +183,69 @@ elif st.session_state.phase == "battle":
     
     if not st.session_state.reroll_done:
         if st.button("🎲 振り直す", type="primary", use_container_width=True):
-            # 演出用のランダム表示
-            ph = st.empty()
-            for _ in range(4):
-                tmp = [random.randint(1, 6) for _ in range(5)]
-                with ph.container():
-                    cols_anim = st.columns(5)
-                    for idx, td in enumerate(tmp): cols_anim[idx].markdown(f'<div class="dice-box">{DICE_ICONS[td]}</div>', unsafe_allow_html=True)
-                time.sleep(0.1)
-            ph.empty()
-            
             final_dice = [random.randint(1, 6) for _ in range(5)]
-            final_dice.sort() # 振り直し後の結果をソート
+            final_dice.sort()
             st.session_state.dice = final_dice
             st.session_state.reroll_done = True; st.rerun()
 
     st.write("---")
     available = []
+    # 使用可能なカードをリストアップ
     cards_to_check = [(c, "固有") for c in p_now["innate"]] + [(c, "手札") for c in p_now["hand"]]
     for c, t in cards_to_check:
         reason = get_reason_text(st.session_state.dice, c.condition_name)
         if reason: available.append((c, reason, t))
 
     if not available:
-        if st.button("ターンを終える", type="primary"): switch_player(); st.rerun()
+        if st.button("役がありません（ターン終了）", type="primary"): switch_player(); st.rerun()
     else:
         grid = st.columns(3)
         for idx, (card, reason, tag) in enumerate(available):
             with grid[idx % 3]:
                 st.markdown(f"**{card.name}**")
+                
+                # カード種別ごとの威力計算表示
                 if card.type == "attack":
-                    total_dmg = max(0, card.value + p_now["bonus"] - p_opp["guard"])
-                    st.markdown(f":red[威力: {total_dmg}]")
+                    bonus = p_now["bonus"] - sum(s["value"] for s in p_now["status"] if s["type"] == "debuff")
+                    dmg = card.value + bonus
+                    if card.effect == "execute": dmg += (150 - p_opp["hp"]) // 2
+                    st.markdown(f":red[予測威力: {max(0, dmg - p_opp['guard'])}]")
+                elif card.type == "draw": st.markdown(f":orange[山札から{card.value}枚引く]")
                 elif card.type == "status": st.markdown(f":violet[効果: {card.value}]")
                 elif card.type == "heal": st.markdown(f":green[回復: {card.value}]")
-                elif card.type == "guard": st.markdown(f":blue[防御: {card.value}]")
+                elif card.type == "guard": st.markdown(f":blue[防御力: {card.value}]")
                 
                 st.caption(f"条件: {reason}")
                 
                 if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
-                    if card.type in ["attack", "status"] and card.effect != "regen":
+                    # 相手の対応（ガード）が必要なカード
+                    if card.type == "attack" or (card.type == "status" and card.effect in ["poison", "debuff"]):
                         st.session_state.pending_action = {"card": card, "source": tag}
                         st.session_state.phase = "counter"; st.rerun()
                     else:
+                        # 自分だけで完結するカード（回復・ガード・ドロー）
                         if card.type == "heal": p_now["hp"] = min(150, p_now["hp"] + card.value)
                         elif card.type == "guard": p_now["guard"] = card.value
-                        elif card.type == "status" and card.effect == "regen":
-                            p_now["status"].append({"type": "regen", "value": card.value, "duration": card.duration})
-                        
+                        elif card.type == "draw":
+                            for _ in range(card.value):
+                                if st.session_state.deck and len(p_now["hand"]) < 8:
+                                    p_now["hand"].append(st.session_state.deck.pop())
+                            add_log("📖", f"{card.name}でドロー")
+
+                        # カード消費
                         target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
                         for i, item in enumerate(target_list):
                             if item.name == card.name:
                                 target_list.pop(i); break
                         
+                        # 固有カード復活チェック
                         if tag == "固有" and not p_now["innate"]:
                             p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
                             add_log("🔥", "覚醒！固有復活")
                         
                         switch_player(); st.rerun()
 
+# --- フェーズ管理: カウンター（相手の防御選択） ---
 elif st.session_state.phase == "counter":
     atk_id = st.session_state.current_player
     opp_key = "p2" if atk_id == "P1" else "p1"
@@ -242,44 +253,65 @@ elif st.session_state.phase == "counter":
     action = st.session_state.pending_action
     card = action["card"]
 
-    st.subheader(f"🛡️ 防御確認")
-    base_dmg = card.value + p_now["bonus"] if card.type == "attack" else 0
+    st.subheader(f"🛡️ 防御確認 (相手ターンのアクション)")
     
+    # 基礎ダメージ計算
+    bonus = p_now["bonus"] - sum(s["value"] for s in p_now["status"] if s["type"] == "debuff")
+    base_dmg = card.value + bonus if card.type == "attack" else 0
+    if card.effect == "execute": base_dmg += (150 - p_opp["hp"]) // 2
+
+    # 防御カードの選択
     guards = [c for c in p_opp["hand"] if c.type == "guard"]
     options = ["防御しない"] + [f"{g.name} ({g.value}軽減)" for g in guards]
-    choice = st.radio("ガード選択:", options)
+    choice = st.radio("使用するガードを選択してください:", options)
 
     g_val = 0
     if "防御しない" not in choice:
         g_val = guards[options.index(choice) - 1].value
     
-    final_dmg = max(0, base_dmg - g_val)
-    if card.type == "attack": st.metric("ダメージ予定", final_dmg, delta=-g_val)
+    # ダメージ表示
+    if card.type == "attack":
+        final_dmg = max(0, base_dmg - g_val)
+        st.metric("ダメージ確定値", f"{final_dmg}", delta=f"-{g_val} (防御)")
+    elif card.effect == "poison":
+        status_text = "無効化" if g_val >= card.value else "付与"
+        st.write(f"毒の威力: {card.value} / ガード値: {g_val} → **毒判定: {status_text}**")
 
-    if st.button("結果を確定", type="primary", use_container_width=True):
+    if st.button("結果を確定する", type="primary", use_container_width=True):
+        # 防御カードを消費
         if g_val > 0:
+            g_name = guards[options.index(choice)-1].name
             for i, c in enumerate(p_opp["hand"]):
-                if c.name == guards[options.index(choice)-1].name:
-                    p_opp["hand"].pop(i); break
+                if c.name == g_name: p_opp["hand"].pop(i); break
         
+        # 効果適用
         if card.type == "status":
-            p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
+            if card.effect == "poison":
+                if g_val >= card.value:
+                    add_log("🛡️", f"{card.name}をガードで無効化！")
+                else:
+                    p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
+                    add_log("🪄", f"防ぎきれず毒を受けた！")
+            else:
+                # デバフなどは現状必中（必要ならここにもg_val判定を追加可能）
+                p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
+                add_log("🪄", f"{card.name}の効果発動")
+        
         elif card.type == "attack":
+            final_dmg = max(0, base_dmg - g_val)
             p_opp["hp"] -= final_dmg
             add_log("💥", f"{final_dmg} ダメージ")
 
+        # 攻撃側のカード消費
         target_list = p_now["innate"] if action["source"] == "固有" else p_now["hand"]
         for i, item in enumerate(target_list):
             if item.name == card.name:
                 target_list.pop(i); break
         
+        # 覚醒処理
         if action["source"] == "固有" and not p_now["innate"]:
             p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
-
-
-
-
 
