@@ -4,6 +4,28 @@ import time
 from collections import Counter
 
 # --- ページ設定 ---
+st.markdown("""
+<style>
+/* サイコロボタン共通 */
+button[key^="dice_"] {
+    background: linear-gradient(145deg, #1f77ff, #005eff) !important;
+    color: white !important;
+    font-size: 2.8rem !important;
+    height: 80px !important;
+    border-radius: 15px !important;
+    box-shadow: 0 0 15px #1f77ff88 !important;
+    border: none !important;
+}
+
+/* 保持中（locked）の見た目 */
+button[key^="dice_"][aria-pressed="true"] {
+    background: linear-gradient(145deg, #555, #333) !important;
+    box-shadow: none !important;
+    opacity: 0.6 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(page_title="Yahtzee Tactics: Sorted Dice", layout="wide")
 
 st.markdown("""
@@ -305,5 +327,6 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
