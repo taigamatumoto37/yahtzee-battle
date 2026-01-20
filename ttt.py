@@ -222,7 +222,7 @@ elif st.session_state.phase == "battle":
                         if card.type == "heal": p_now["hp"] = min(150, p_now["hp"] + card.value)
                         elif card.type == "guard": p_now["guard"] = card.value
                         elif card.type == "status" and card.effect == "regen":
-                           p_now["status"].append({"type": "regen","value": card.value,"duration": card.duration})
+                            p_now["status"].append({"type": "regen","value": card.value,"duration": card.duration})
                             target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
                             add_log("🔥", f"攻撃力 +{card.value}")
                         
@@ -279,6 +279,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
