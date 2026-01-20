@@ -201,6 +201,11 @@ elif st.session_state.phase == "battle":
         ):
             st.session_state.locked[i] = not locked
             st.rerun()
+		if locked:
+        	d_cols[i].markdown(
+            "<div style='text-align:center; font-size:1.5rem;'>🔒</div>",
+            unsafe_allow_html=True
+        )
 
         d_cols[i].markdown(
             f"<div style='{style} text-align:center; font-size:2.5rem;'>"
@@ -326,6 +331,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
