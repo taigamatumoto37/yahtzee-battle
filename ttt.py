@@ -231,7 +231,7 @@ elif st.session_state.phase == "battle":
 
     
                         
-                        target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
+                    target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
                         for i, item in enumerate(target_list):
                             if item.name == card.name:
                                 target_list.pop(i); break
@@ -285,6 +285,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
