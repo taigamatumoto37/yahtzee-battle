@@ -254,6 +254,7 @@ elif st.session_state.phase == "battle":
                         switch_player(); st.rerun()
 
 # --- フェーズ管理: カウンター ---
+# --- フェーズ管理: カウンター（複数枚ガード対応版） ---
 elif st.session_state.phase == "counter":
     atk_id = st.session_state.current_player
     opp_key = "p2" if atk_id == "P1" else "p1"
@@ -263,46 +264,63 @@ elif st.session_state.phase == "counter":
 
     st.subheader(f"🛡️ 防御確認 (相手ターンのアクション)")
     
+    # 攻撃力計算
     bonus = p_now["bonus"] - sum(s["value"] for s in p_now["status"] if s["type"] == "debuff")
     base_dmg = card.value + bonus if card.type == "attack" else 0
     if card.effect == "execute": base_dmg += (150 - p_opp["hp"]) // 2
 
+    # ガードカードの複数選択 UI
     guards = [c for c in p_opp["hand"] if c.type == "guard"]
-    options = ["防御しない"] + [f"{g.name} ({g.value}軽減)" for g in guards]
-    choice = st.radio("使用するガードを選択:", options)
-
-    g_val = 0
-    if "防御しない" not in choice:
-        g_val = guards[options.index(choice) - 1].value
+    guard_names = [f"{g.name} ({g.value})" for g in guards]
     
-    if card.type == "attack":
-        final_dmg = max(0, base_dmg - g_val)
-        st.metric("確定ダメージ", f"{final_dmg}", delta=f"-{g_val}")
-    elif card.effect == "poison":
-        st.write(f"毒威力: {card.value} / ガード値: {g_val} → {'無効' if g_val >= card.value else '付与'}")
+    selected_guard_names = st.multiselect(
+        "防御に使用するカードを選択してください（複数可）:",
+        options=guard_names,
+        help="手札から複数のガードを組み合わせてダメージを軽減できます。"
+    )
 
-    if st.button("結果を確定", type="primary", use_container_width=True):
-        if g_val > 0:
-            g_name = guards[options.index(choice)-1].name
+    # 選択されたガードの合計値を計算
+    total_g_val = 0
+    selected_indices = []
+    for g_name in selected_guard_names:
+        idx = guard_names.index(g_name)
+        total_g_val += guards[idx].value
+        selected_indices.append(idx)
+    
+    # ダメージ表示
+    if card.type == "attack":
+        final_dmg = max(0, base_dmg - total_g_val)
+        st.metric("確定ダメージ", f"{final_dmg}", delta=f"-{total_g_val} (合計防御)")
+    elif card.effect == "poison":
+        st.write(f"毒威力: {card.value} / 合計ガード値: {total_g_val} → {'無効' if total_g_val >= card.value else '付与'}")
+
+    if st.button("結果を確定する", type="primary", use_container_width=True):
+        # 選択されたすべての防御カードを消費
+        for idx in selected_indices:
+            target_card_name = guards[idx].name
             for i, c in enumerate(p_opp["hand"]):
-                if c.name == g_name: p_opp["hand"].pop(i); break
+                if c.name == target_card_name:
+                    p_opp["hand"].pop(i)
+                    break
         
+        # 効果適用
         if card.type == "status":
             if card.effect == "poison":
-                if g_val >= card.value:
-                    add_log("🛡️", f"{card.name}を完全防御！")
+                if total_g_val >= card.value:
+                    add_log("🛡️", f"{card.name}を鉄壁の防御で無効化！")
                 else:
                     p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
-                    add_log("🪄", "毒を受けた！")
+                    add_log("🪄", f"防ぎきれず毒を受けた！")
             else:
                 p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
-                add_log("🪄", f"{card.name}発動")
+                add_log("🪄", f"{card.name}の効果発動")
         
         elif card.type == "attack":
-            final_dmg = max(0, base_dmg - g_val)
+            final_dmg = max(0, base_dmg - total_g_val)
             p_opp["hp"] -= final_dmg
-            add_log("💥", f"{final_dmg} ダメージ")
+            add_log("💥", f"{total_g_val}の防御を貫き {final_dmg} ダメージ")
 
+        # 攻撃側のカード消費
         target_list = p_now["innate"] if action["source"] == "固有" else p_now["hand"]
         for i, item in enumerate(target_list):
             if item.name == card.name:
