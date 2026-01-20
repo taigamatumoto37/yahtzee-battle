@@ -77,6 +77,11 @@ if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリ�
     for _ in range(5):  common_deck.append(Card("癒しのハーブ", "heal", 35, "check_pair"))
     for _ in range(3):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3))
     for _ in range(4):  common_deck.append(Card("猛毒の粉末", "status", 12, "check_pair", effect="poison", duration=3))
+    for _ in range(4):  common_deck.append(Card("英知の書", "draw", 2, "any"))
+    for _ in range(4):  common_deck.append(Card("破滅の呪い", "status", 5, "check_three", effect="debuff", duration=99)) # 永続攻撃ダウン
+    for _ in range(4):  common_deck.append(Card("死神の鎌", "attack", 10, "check_full_house", effect="execute")) # 追い打ち
+        
+        
     random.shuffle(common_deck)
     initial_dice = [random.randint(1, 6) for _ in range(5)]
     initial_dice.sort() # 初期ダイスをソート
@@ -273,3 +278,4 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
