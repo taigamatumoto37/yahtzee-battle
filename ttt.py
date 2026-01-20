@@ -85,6 +85,7 @@ if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリ�
         'p1': {"hp": 150, "hand": [], "innate": get_innate_deck(), "guard": 0, "bonus": 0, "status": []},
         'p2': {"hp": 150, "hand": [], "innate": get_innate_deck(), "guard": 0, "bonus": 0, "status": []},
         'current_player': "P1", 'dice': initial_dice,
+	'locked': [False] * 5, 
         'phase': "action", 'reroll_done': False, 
         'log_entries': [{"icon": "⚔️", "msg": "宿命の対決開始"}], 
         'winner': None, 'pending_action': None
@@ -117,6 +118,7 @@ def switch_player():
     new_dice.sort() # 交代時のダイスをソート
     st.session_state.dice = new_dice
     st.session_state.pending_action = None
+st.session_state.locked = [False] * 5
 
 # --- UI Layout ---
 with st.sidebar:
@@ -164,10 +166,28 @@ elif st.session_state.phase == "battle":
     p_now = st.session_state[st.session_state.current_player.lower()]
     p_opp = st.session_state["p2" if st.session_state.current_player == "P1" else "p1"]
     
-    st.write("### 🎲 運命の刻印")
-    d_cols = st.columns(5)
-    for i, d in enumerate(st.session_state.dice):
-        d_cols[i].markdown(f'<div class="dice-box">{DICE_ICONS[d]}</div>', unsafe_allow_html=True)
+st.write("### 🎲 運命の刻印（クリックで保持）")
+d_cols = st.columns(5)
+
+for i, d in enumerate(st.session_state.dice):
+    locked = st.session_state.locked[i]
+    style = "opacity:0.4; filter:grayscale(100%);" if locked else ""
+    
+    if d_cols[i].button(
+        f"{DICE_ICONS[d]}",
+        key=f"dice_{i}",
+        use_container_width=True
+    ):
+        st.session_state.locked[i] = not locked
+        st.rerun()
+    
+    d_cols[i].markdown(
+        f"<div style='{style} text-align:center; font-size:2.5rem;'>"
+        f"{'🔒' if locked else ''}"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
     
     if not st.session_state.reroll_done:
         if st.button("🎲 振り直す", type="primary", use_container_width=True):
@@ -181,10 +201,18 @@ elif st.session_state.phase == "battle":
                 time.sleep(0.1)
             ph.empty()
             
-            final_dice = [random.randint(1, 6) for _ in range(5)]
+            final_dice = []
+	for i in range(5):
+    		if st.session_state.locked[i]:
+        		final_dice.append(st.session_state.dice[i])
+    		else:
+        		final_dice.append(random.randint(1, 6))
+
             final_dice.sort() # 振り直し後の結果をソート
             st.session_state.dice = final_dice
             st.session_state.reroll_done = True; st.rerun()
+	    st.session_state.locked = [False] * 5
+
 
     st.write("---")
     available = []
@@ -273,3 +301,4 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
