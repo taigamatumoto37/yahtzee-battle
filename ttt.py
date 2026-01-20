@@ -164,7 +164,7 @@ if st.session_state.phase == "action":
     with c1:
         if st.button("🎴 カードを引いて交代", use_container_width=True, type="primary"):
             p = st.session_state[st.session_state.current_player.lower()]
-            if st.session_state.deck and len(p["hand"]) < 8
+            if st.session_state.deck and len(p["hand"]) < 5
             :
                 p["hand"].append(st.session_state.deck.pop())
                 switch_player(); st.rerun()
@@ -313,6 +313,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
