@@ -193,7 +193,8 @@ elif st.session_state.phase == "battle":
 
     st.write("---")
     available = []
-    cards_to_check = [(c, "固有") for c in p_now["innate"]] + [(c, "手札") for c in p_now["hand"]]
+    cards_to_check = (
+    [(c, "固有") for c in p_now["innate"] if c.type != "guard"] +[(c, "手札") for c in p_now["hand"] if c.type != "guard"])
     for c, t in cards_to_check:
         reason = get_reason_text(st.session_state.dice, c.condition_name)
         if reason: available.append((c, reason, t))
@@ -279,6 +280,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
