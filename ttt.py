@@ -77,8 +77,6 @@ if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリ�
     for _ in range(5):  common_deck.append(Card("癒しのハーブ", "heal", 35, "check_pair"))
     for _ in range(3):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3))
     for _ in range(4):  common_deck.append(Card("猛毒の粉末", "status", 12, "check_pair", effect="poison", duration=3))
-    for _ in range(4):  common_deck.append(Card("攻撃強化の粉末", "status", 12, "check_pair", effect="buff", duration=3))
-
     random.shuffle(common_deck)
     initial_dice = [random.randint(1, 6) for _ in range(5)]
     initial_dice.sort() # 初期ダイスをソート
@@ -100,8 +98,7 @@ def process_status_effects(player_key):
     new_status = []
     for s in p["status"]:
         if s["type"] == "poison":
-            p["hp"] -= s["value"]; add_log("☣️", f"{player_key}に毒ダメージ: {s['value']}")   
-
+            p["hp"] -= s["value"]; add_log("☣️", f"{player_key}に毒ダメージ: {s['value']}")
         elif s["type"] == "regen":
             p["hp"] = min(150, p["hp"] + s["value"]); add_log("💖", f"{player_key}が再生回復: {s['value']}")
         s["duration"] -= 1
@@ -185,14 +182,13 @@ elif st.session_state.phase == "battle":
             ph.empty()
             
             final_dice = [random.randint(1, 6) for _ in range(5)]
-            final_dice.sort() 
+            final_dice.sort() # 振り直し後の結果をソート
             st.session_state.dice = final_dice
             st.session_state.reroll_done = True; st.rerun()
 
     st.write("---")
     available = []
-    cards_to_check = (
-    [(c, "固有") for c in p_now["innate"] if c.type != "guard"] +[(c, "手札") for c in p_now["hand"] if c.type != "guard"])
+    cards_to_check = [(c, "固有") for c in p_now["innate"]] + [(c, "手札") for c in p_now["hand"]]
     for c, t in cards_to_check:
         reason = get_reason_text(st.session_state.dice, c.condition_name)
         if reason: available.append((c, reason, t))
@@ -214,32 +210,66 @@ elif st.session_state.phase == "battle":
                 st.caption(f"条件: {reason}")
                 
                 if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
-                    if card.type == "attack" or (card.type == "status" and card.effect == "poison"):
+                    if card.type in ["attack", "status"] and card.effect != "regen":
                         st.session_state.pending_action = {"card": card, "source": tag}
-                        st.session_state.phase = "counter"
-                        st.rerun()
-                    
-                    target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
-                    if card.type == "heal":
-                        p_now["hp"] = min(150, p_now["hp"] + card.value)
-                    elif card.type == "guard":
-                        p_now["guard"] = card.value
-                    elif card.type == "status" and card.effect == "regen":
-                        p_now["status"].append({
-                            "type": "regen",
-                            "value": card.value,
-                            "duration": card.duration
-                        })
-                     # カード消費
-                    for i, item in enumerate(target_list):
-                        if item.name == card.name:
-                            target_list.pop(i)
-                            break
+                        st.session_state.phase = "counter"; st.rerun()
+                    else:
+                        if card.type == "heal": p_now["hp"] = min(150, p_now["hp"] + card.value)
+                        elif card.type == "guard": p_now["guard"] = card.value
+                        elif card.type == "status" and card.effect == "regen":
+                            p_now["status"].append({"type": "regen", "value": card.value, "duration": card.duration})
+                        
+                        target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
+                        for i, item in enumerate(target_list):
+                            if item.name == card.name:
+                                target_list.pop(i); break
+                        
                         if tag == "固有" and not p_now["innate"]:
-                            p_now["innate"] = get_innate_deck()
-                            p_now["bonus"] += 10
+                            p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
                             add_log("🔥", "覚醒！固有復活")
-                        switch_player()
-                        st.rerun()
-                     
+                        
+                        switch_player(); st.rerun()
 
+elif st.session_state.phase == "counter":
+    atk_id = st.session_state.current_player
+    opp_key = "p2" if atk_id == "P1" else "p1"
+    p_now, p_opp = st.session_state[atk_id.lower()], st.session_state[opp_key]
+    action = st.session_state.pending_action
+    card = action["card"]
+
+    st.subheader(f"🛡️ 防御確認")
+    base_dmg = card.value + p_now["bonus"] if card.type == "attack" else 0
+    
+    guards = [c for c in p_opp["hand"] if c.type == "guard"]
+    options = ["防御しない"] + [f"{g.name} ({g.value}軽減)" for g in guards]
+    choice = st.radio("ガード選択:", options)
+
+    g_val = 0
+    if "防御しない" not in choice:
+        g_val = guards[options.index(choice) - 1].value
+    
+    final_dmg = max(0, base_dmg - g_val)
+    if card.type == "attack": st.metric("ダメージ予定", final_dmg, delta=-g_val)
+
+    if st.button("結果を確定", type="primary", use_container_width=True):
+        if g_val > 0:
+            for i, c in enumerate(p_opp["hand"]):
+                if c.name == guards[options.index(choice)-1].name:
+                    p_opp["hand"].pop(i); break
+        
+        if card.type == "status":
+            p_opp["status"].append({"type": card.effect, "value": card.value, "duration": card.duration})
+        elif card.type == "attack":
+            p_opp["hp"] -= final_dmg
+            add_log("💥", f"{final_dmg} ダメージ")
+
+        target_list = p_now["innate"] if action["source"] == "固有" else p_now["hand"]
+        for i, item in enumerate(target_list):
+            if item.name == card.name:
+                target_list.pop(i); break
+        
+        if action["source"] == "固有" and not p_now["innate"]:
+            p_now["innate"] = get_innate_deck(); p_now["bonus"] += 10
+            add_log("🔥", "覚醒！固有復活")
+
+        switch_player(); st.rerun()
