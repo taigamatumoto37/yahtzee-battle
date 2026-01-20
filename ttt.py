@@ -6,7 +6,6 @@ from collections import Counter
 # --- ページ設定 ---
 st.markdown("""
 <style>
-/* サイコロボタン共通 */
 button[key^="dice_"] {
     background: linear-gradient(145deg, #1f77ff, #005eff) !important;
     color: white !important;
@@ -193,7 +192,7 @@ elif st.session_state.phase == "battle":
 
     for i, d in enumerate(st.session_state.dice):
         locked = st.session_state.locked[i]
-        style = "opacity:0.4; filter:grayscale(100%);" if locked else ""
+       
 
         if d_cols[i].button(
             f"{DICE_ICONS[d]}",
@@ -327,6 +326,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
