@@ -215,16 +215,17 @@ elif st.session_state.phase == "battle":
                 st.caption(f"条件: {reason}")
                 
                 if st.button("発動", key=f"btn_{idx}", use_container_width=True, type="primary"):
-                    if card.type in ["attack", "status"] and card.effect != "regen":
+                    if card.type == "attack" or (card.type == "status" and card.effect == "poison"):
                         st.session_state.pending_action = {"card": card, "source": tag}
                         st.session_state.phase = "counter"; st.rerun()
                     else:
                         if card.type == "heal": p_now["hp"] = min(150, p_now["hp"] + card.value)
                         elif card.type == "guard": p_now["guard"] = card.value
                         elif card.type == "status" and card.effect == "regen":
-                            p_now["status"].append({"type": "regen", "value": card.value, "duration": card.duration})
+                           p_now["status"].append({"type": "regen","value": card.value,"duration": card.duration})
+                            target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
+                            add_log("🔥", f"攻撃力 +{card.value}")
                         
-                        target_list = p_now["innate"] if tag == "固有" else p_now["hand"]
                         for i, item in enumerate(target_list):
                             if item.name == card.name:
                                 target_list.pop(i); break
@@ -278,6 +279,7 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
 
