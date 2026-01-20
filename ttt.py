@@ -101,6 +101,9 @@ def process_status_effects(player_key):
     for s in p["status"]:
         if s["type"] == "poison":
             p["hp"] -= s["value"]; add_log("☣️", f"{player_key}に毒ダメージ: {s['value']}")
+        elif card.type == "status" and card.effect == "buff":
+            p_now["bonus"] += card.value
+
         elif s["type"] == "regen":
             p["hp"] = min(150, p["hp"] + s["value"]); add_log("💖", f"{player_key}が再生回復: {s['value']}")
         s["duration"] -= 1
@@ -275,5 +278,6 @@ elif st.session_state.phase == "counter":
             add_log("🔥", "覚醒！固有復活")
 
         switch_player(); st.rerun()
+
 
 
