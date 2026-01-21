@@ -59,11 +59,11 @@ class Card:
 def get_innate_deck():
     return [
         Card("固有:一閃", "attack", 15, "check_pair"),
-        Card("固有:双刃", "attack", 25, "check_pair"),
+        Card("固有:双刃", "attack", 26, "check_pair"),
         Card("固有:癒歌", "heal", 30, "check_pair"),
-        Card("固有:毒液", "status", 10, "check_pair", effect="poison", duration=3),
-        Card("固有:強撃", "attack", 45, "check_three"),
-        Card("固有:爆裂", "attack", 70, "check_small_straight"),
+        Card("固有:毒液", "status", 11, "check_pair", effect="poison", duration=3),
+        Card("固有:強撃", "attack", 43, "check_three"),
+        Card("固有:爆裂", "attack", 67, "check_small_straight"),
         Card("固有:絶技", "attack", 90, "check_full_house"),
         Card("固有:神域", "attack", 150, "check_yahtzee")
     ]
@@ -71,15 +71,15 @@ def get_innate_deck():
 # --- 初期化 ---
 if 'deck' not in st.session_state or st.sidebar.button("♻️ ゲームをリセット"):
     common_deck = []
-    for _ in range(13): common_deck.append(Card("追撃・小剣", "attack", 3.14159265, "check_pair"))
-    for _ in range(10): common_deck.append(Card("強襲・大剣", "attack", 65, "check_three"))
+    for _ in range(13): common_deck.append(Card("追撃・小剣", "attack", 23, "check_pair"))
+    for _ in range(10): common_deck.append(Card("強襲・大剣", "attack", 62, "check_three"))
     for _ in range(9):  common_deck.append(Card("アイアン・ガード", "guard", 45, "check_pair"))
     for _ in range(9):  common_deck.append(Card("癒しのハーブ", "heal", 35, "check_pair"))
     for _ in range(8):  common_deck.append(Card("癒しの香水", "status", 15, "check_pair", effect="regen", duration=3))
     for _ in range(6):  common_deck.append(Card("神聖な水", "status", 35, "check_pair", effect="regen", duration=2))
     for _ in range(4):  common_deck.append(Card("猛毒の粉末", "status", 15, "check_pair", effect="poison", duration=3))
     for _ in range(4):  common_deck.append(Card("破滅の呪い", "status", 5, "check_three", effect="poison", duration=10))
-    for _ in range(4):  common_deck.append(Card("破滅の呪い", "status", 3.14159265, "check_pair", effect="poison", duration=3))
+    for _ in range(4):  common_deck.append(Card("円周率の呪い", "status", 3.1415926535, "check_pair", effect="poison", duration=3))
  
         
         
@@ -344,6 +344,7 @@ elif st.session_state.phase == "counter":
 
         switch_player()
         st.rerun()
+
 
 
 
